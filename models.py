@@ -18,21 +18,17 @@ class ModelS(LocalModelBase):
     Example document:
 
     {
-       "_id": "http://www.w3.org/People/Berners-Lee/card#i#http://graph.name",
-       "_rev": "1-d7841397d995f90480553919cff49bd8",
-       "p": [
-           "http://xmlns.com/foaf/0.1/nick",
-           "http://xmlns.com/foaf/0.1/nick",
-           "http://www.w3.org/2000/01/rdf-schema#label",
+       "_id": "http://graph.name http://www.w3.org/People/Berners-Lee/card#i",
+       "_rev": "1-e004c4ac4b5f7923892ad417d364a85e",
+       "http://www.w3.org/2000/01/rdf-schema#label": [
+           "Tim Berners-Lee"
        ],
-       "s": "http://www.w3.org/People/Berners-Lee/card#i",
-       "g": "http://graph.name",
-       "o": [
+       "http://xmlns.com/foaf/0.1/nick": [
            "TimBL",
-           "timbl",
-           "Tim Berners-Lee",
+           "timbl"
        ]
     }
+
     """
     def cache_key(self, couch_key):
         return couch_key.split(' ')[1]
@@ -51,17 +47,21 @@ class ModelT(LocalModelBase):
     Example document:
 
     {
-       "_id": "http://graph.name http://www.w3.org/People/Berners-Lee/card#i",
-       "_rev": "1-e004c4ac4b5f7923892ad417d364a85e",
-       "http://www.w3.org/2000/01/rdf-schema#label": [
-           "Tim Berners-Lee"
+       "_id": "http://www.w3.org/People/Berners-Lee/card#i#http://graph.name",
+       "_rev": "1-d7841397d995f90480553919cff49bd8",
+       "p": [
+           "http://xmlns.com/foaf/0.1/nick",
+           "http://xmlns.com/foaf/0.1/nick",
+           "http://www.w3.org/2000/01/rdf-schema#label",
        ],
-       "http://xmlns.com/foaf/0.1/nick": [
+       "s": "http://www.w3.org/People/Berners-Lee/card#i",
+       "g": "http://graph.name",
+       "o": [
            "TimBL",
-           "timbl"
+           "timbl",
+           "Tim Berners-Lee",
        ]
     }
-
     """
     def cache_key(self, couch_key):
         return couch_key.rsplit('#', 1)[0]
