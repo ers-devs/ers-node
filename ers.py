@@ -5,6 +5,9 @@ import requests # used by tests only
 from collections import defaultdict
 from models import ModelS, ModelT
                                                         
+# Document model is used to store data in CouchDB. The API is independent from the choice of model.
+DEFAULT_MODEL = ModelS()
+
 class EntityCache(defaultdict):
     """Equivalent to defaultdict(lambda: defaultdict(set))."""
     def __init__(self):
@@ -16,7 +19,7 @@ class EntityCache(defaultdict):
 
 
 class ERSLocal(object):
-    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = ModelS()):
+    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL):
         self.server = couchdbkit.Server(serverURL)
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
@@ -39,7 +42,7 @@ class ERSLocal(object):
         input_doc = open(file_name, "r")
         for input_line in input_doc:
              # parsing a triple @@FIXME: employ real NTriples parser here!
-            triple = input_line.split(' ', 2) # naively assumes SPO is separated by a single whitespace
+            triple = input_line.split(None, 2) # assumes SPO is separated by any whitespace string with leading and trailing spaces ignored
             s = triple[0][1:-1] # get rid of the <>, naively assumes no bNodes for now
             p = triple[1][1:-1] # get rid of the <>
             o = triple[2][1:-1] # get rid of the <> or "", naively assumes no bNodes for now
