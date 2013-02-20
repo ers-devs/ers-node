@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import couchdbkit
+import rdflib
 import requests # used by tests only
 from collections import defaultdict
 from models import ModelS, ModelT
@@ -54,6 +55,16 @@ class ERSLocal(object):
             else:
                 o = triple[2].split(' ')[0] # might be a named node
             cache.add(s,p,o)
+        self.write_cache(cache, target_graph)
+
+    def import_nt_rdflib(self, file_name, target_graph):
+        """Import N-Triples file using rdflib."""
+        # TODO: get rid of the intermediate cache?
+        cache = EntityCache()
+        graph = rdflib.Graph()
+        graph.parse(file_name, format='nt')
+        for s, p, o in graph:
+            cache.add(str(s), str(p), str(o))
         self.write_cache(cache, target_graph)
 
     def write_cache(self, cache, graph):
