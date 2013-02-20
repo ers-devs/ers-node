@@ -26,12 +26,23 @@ class ERSLocal(object):
         self.model = model
 
     def add_data(self):
+        """add a property+value to an identifier (create it if it does not exist yet)"""
         pass
 
     def delete_entity(self, subject, graph):
+        """delete ids"""
         return self.db.delete_doc(self.model.couch_key(subject, graph))
 
+    def delete_value(self, subject, graph):
+        """delete value"""
+        pass
+
     def get_data(self, subject, graph):
+        """get all property+values for an identifier"""
+        pass
+
+    def get_value(self, subject, object, graph):
+        """get the value for a identifier+property (return null or a special value if it does not exist)"""
         pass
 
     def exist(self, subject, graph):
@@ -78,6 +89,10 @@ class ERSLocal(object):
             docs.append(couch_doc)
         self.db.save_docs(docs)
 
+    def update_value(self, subject, object, graph=None):
+        """update a value for an identifier+property (create it if it does not exist yet)"""
+        pass
+
 
 def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
@@ -106,6 +121,10 @@ def test():
     test_ers()
     doc = requests.get(r'http://127.0.0.1:5984/{0}/http%3A%2F%2Fwww.w3.org%2FPeople%2FBerners-Lee%2Fcard%23i%23timbl'.format(dbname)).json()
     assert set([o for p, o in zip(doc['p'], doc['o']) if p=='http://xmlns.com/foaf/0.1/nick']) == set([u'TimBL', u'timbl'])
+
+    # ers.friends = [r'http://127.0.0.1:5984/friend1', r'http://127.0.0.1:5984/friend2']
+    # ers.ask_friends('exist', 'http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X')
+    # ers.ask_friends('get_data', 'http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X')
 
     print "Tests pass"
 
