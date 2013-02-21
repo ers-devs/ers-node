@@ -1,0 +1,6 @@
+#!/bin/bash
+DIR="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+echo "Starting CouchDB from $DIR"
+cd "$DIR"
+mkdir couchdata 2> /dev/null
+couchdb  -b -a local.ini -p couchdata/couch.pid -o couchdata/couch.stdout -e couchdata/couch.stderr
