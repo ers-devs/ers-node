@@ -53,9 +53,10 @@ class ERSLocal(object):
             return None
         raise Exception()
 
-    def get_value(self, subject, object, graph):
+    def get_value(self, subject, predicate, graph):
         """get the value for a identifier+property (return null or a special value if it does not exist)"""
-        
+        data = get_data(subject, graph)
+        return data.get(predicate, None)        
 
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
