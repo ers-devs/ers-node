@@ -25,9 +25,11 @@ class ERSLocal(object):
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
 
-    def add_data(self):
+    def add_data(self, s, p, o, g):
         """add a property+value to an identifier (create it if it does not exist yet)"""
-        pass
+        triples = EntityCache()
+        triples.add(s,p,o)
+        self.write_cache(triples, g)
 
     def delete_entity(self, subject, graph):
         """delete ids"""
@@ -39,11 +41,21 @@ class ERSLocal(object):
 
     def get_data(self, subject, graph):
         """get all property+values for an identifier"""
-        pass
+        doc = self.get_doc(subject, graph)
+        if doc:
+            return self.model.get_data(doc)
+        return None
+
+    def get_doc(self, subject, graph):
+        try:
+            return self.db.get(self.model.couch_key(subject, graph))
+        except couchdbkit.exceptions.ResourceNotFound: 
+            return None
+        raise Exception()
 
     def get_value(self, subject, object, graph):
         """get the value for a identifier+property (return null or a special value if it does not exist)"""
-        pass
+        
 
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
@@ -100,7 +112,7 @@ def test():
         if dbname in server:
             server.delete_db(dbname)
         ers = ERSLocal(dbname=dbname, model=model)
-        ers.import_nt('../test_dataset/timbl.nt', 'timbl')
+        ers.import_nt('../tests/data/timbl.nt', 'timbl')
         return ers
 
     def test_ers():
@@ -109,6 +121,9 @@ def test():
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
         assert ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')['ok'] == True
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == False
+        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'ok', 'urn:ers:selftest1')
+        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'ok 2', 'urn:ers:selftest1')
+
  
     dbname = 'ers_s'
     ers = prepare_ers(ModelS(), dbname)
