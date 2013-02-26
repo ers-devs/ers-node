@@ -78,7 +78,7 @@ class ModelT(LocalModelBase):
     def get_data(self, doc):
         data_dict = {}
         for p, o in zip(doc['p'], doc['o']):
-            data_dict[p] = data_dict.get(p, []).append(o)
+            data_dict.setdefault(p, []).append(o)
         return data_dict
 
     def refresh_doc(self, couch_doc, cache):
