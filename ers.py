@@ -122,23 +122,21 @@ def test():
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
         assert ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')['ok'] == True
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == False
-        values = set(['value 1', 'value 2'])
-        for value in values:
-            ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', value, 'urn:ers:selftest1')
-        data = ers.get_data('urn:ers:meta:call:add_data', 'urn:ers:selftest1')
-        assert set(data['urn:ers:meta:predicates:testResult']) == values
-        assert set(ers.get_value('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult',
-                                 'urn:ers:selftest1')) == values
+        s = 'urn:ers:meta:testSubject'
+        p = 'urn:ers:meta:predicates:hasValue'
+        g = 'urn:ers:meta:testGraph'
+        objects = set(['value 1', 'value 2'])
+        for o in objects:
+            ers.add_data(s, p, o, g)
+        data = ers.get_data(s, g)
+        assert set(data[p]) == objects
+        assert set(ers.get_value(s, p, g)) == objects
 
     for model in [ModelS(), ModelT()]:
         dbname = 'ers_' + model.__class__.__name__.lower()
         ers = prepare_ers(model, dbname)
         test_ers()
  
-    # ers.friends = [r'http://127.0.0.1:5984/friend1', r'http://127.0.0.1:5984/friend2']
-    # ers.ask_friends('exist', 'http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X')
-    # ers.ask_friends('get_data', 'http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X')
-
     print "Tests pass"
 
 
