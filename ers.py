@@ -55,7 +55,7 @@ class ERSLocal(object):
 
     def get_value(self, subject, predicate, graph):
         """get the value for a identifier+property (return null or a special value if it does not exist)"""
-        data = get_data(subject, graph)
+        data = self.get_data(subject, graph)
         return data.get(predicate, None)        
 
     def exist(self, subject, graph):
@@ -122,10 +122,13 @@ def test():
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
         assert ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')['ok'] == True
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == False
-        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'value 1', 'urn:ers:selftest1')
-        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'value 2', 'urn:ers:selftest1')
+        values = set(['value 1', 'value 2'])
+        for value in values:
+            ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', value, 'urn:ers:selftest1')
         data = ers.get_data('urn:ers:meta:call:add_data', 'urn:ers:selftest1')
-        assert set(data['urn:ers:meta:predicates:testResult']) == set(['value 1', 'value 2'])
+        assert set(data['urn:ers:meta:predicates:testResult']) == values
+        assert set(ers.get_value('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult',
+                                 'urn:ers:selftest1')) == values
 
     for model in [ModelS(), ModelT()]:
         dbname = 'ers_' + model.__class__.__name__.lower()
