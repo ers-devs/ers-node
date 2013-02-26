@@ -121,22 +121,16 @@ def test():
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
         assert ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')['ok'] == True
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == False
-        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'ok', 'urn:ers:selftest1')
-        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'ok 2', 'urn:ers:selftest1')
+        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'value 1', 'urn:ers:selftest1')
+        ers.add_data('urn:ers:meta:call:add_data', 'urn:ers:meta:predicates:testResult', 'value 2', 'urn:ers:selftest1')
+        data = ers.get_data('urn:ers:meta:call:add_data', 'urn:ers:selftest1')
+        assert set(data['urn:ers:meta:predicates:testResult']) == set(['value 1', 'value 2'])
 
+    for model in [ModelS(), ModelT()]:
+        dbname = 'ers_' + model.__class__.__name__.lower()
+        ers = prepare_ers(model, dbname)
+        test_ers()
  
-    dbname = 'ers_s'
-    ers = prepare_ers(ModelS(), dbname)
-    test_ers()
-    doc = requests.get(r'http://127.0.0.1:5984/{0}/timbl%20http%3A%2F%2Fwww.w3.org%2FPeople%2FBerners-Lee%2Fcard%23i'.format(dbname)).json()
-    assert set(doc['http://xmlns.com/foaf/0.1/nick']) == set([u'TimBL', u'timbl'])
-
-    dbname = 'ers_t'
-    ers = prepare_ers(ModelT(), dbname)
-    test_ers()
-    doc = requests.get(r'http://127.0.0.1:5984/{0}/http%3A%2F%2Fwww.w3.org%2FPeople%2FBerners-Lee%2Fcard%23i%23timbl'.format(dbname)).json()
-    assert set([o for p, o in zip(doc['p'], doc['o']) if p=='http://xmlns.com/foaf/0.1/nick']) == set([u'TimBL', u'timbl'])
-
     # ers.friends = [r'http://127.0.0.1:5984/friend1', r'http://127.0.0.1:5984/friend2']
     # ers.ask_friends('exist', 'http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X')
     # ers.ask_friends('get_data', 'http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X')
