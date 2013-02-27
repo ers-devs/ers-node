@@ -2,7 +2,6 @@
 
 import couchdbkit
 import rdflib
-import requests # used by tests only
 from collections import defaultdict
 from models import ModelS, ModelT
                                                         
