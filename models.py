@@ -8,6 +8,9 @@ class LocalModelBase(object):
     def couch_key(self, cache_key, graph):
         return cache_key
 
+    def get_data(self, doc, subject, graph):
+        pass
+        
     def refresh_doc(self, couch_doc, cache):
         pass
 
