@@ -17,27 +17,11 @@ class EntityCache(defaultdict):
         """Add <s, p, o> to cache."""
         self[s][p].add(o)
 
-
-class ERSLocal(object):
+class ERSReadOnly(object):
     def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL):
         self.server = couchdbkit.Server(serverURL)
-        self.db = self.server.get_or_create_db(dbname)
+        self.db = self.server.get_db(dbname)
         self.model = model
-
-    def add_data(self, s, p, o, g):
-        """add a property+value to an identifier (create it if it does not exist yet)"""
-        triples = EntityCache()
-        triples.add(s,p,o)
-        self.write_cache(triples, g)
-
-    def delete_entity(self, subject, graph):
-        """delete ids"""
-        return self.db.delete_doc(self.model.couch_key(subject, graph))
-
-    def delete_value(self, subject, graph):
-        """delete value"""
-
-        pass
 
     def get_data(self, subject, graph):
         """get all property+values for an identifier"""
@@ -66,6 +50,27 @@ class ERSLocal(object):
 
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
+
+
+class ERSLocal(ERSReadOnly):
+    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL):
+        self.server = couchdbkit.Server(serverURL)
+        self.db = self.server.get_or_create_db(dbname)
+        self.model = model
+
+    def add_data(self, s, p, o, g):
+        """add a property+value to an identifier (create it if it does not exist yet)"""
+        triples = EntityCache()
+        triples.add(s,p,o)
+        self.write_cache(triples, g)
+
+    def delete_entity(self, subject, graph):
+        """delete ids"""
+        return self.db.delete_doc(self.model.couch_key(subject, graph))
+
+    def delete_value(self, subject, graph):
+        """delete value"""
+        pass
 
     def import_nt(self, file_name, target_graph):
         """Import N-Triples file."""
