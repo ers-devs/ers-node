@@ -42,7 +42,7 @@ class ERSLocal(object):
         """get all property+values for an identifier"""
         doc = self.get_doc(subject, graph)
         if doc:
-            return self.model.get_data(doc)
+            return self.model.get_data(doc, subject, graph)
         return None
 
     def get_annotation(entity):

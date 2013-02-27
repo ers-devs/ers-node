@@ -36,7 +36,7 @@ class ModelS(LocalModelBase):
     def couch_key(self, cache_key, graph):
         return "{0} {1}".format(graph, cache_key)
 
-    def get_data(self, doc):
+    def get_data(self, doc, subject, graph):
         data_dict = doc.copy()
         data_dict.pop('_id', None)
         data_dict.pop('_rev', None)
@@ -75,7 +75,7 @@ class ModelT(LocalModelBase):
     def couch_key(self, cache_key, graph):
         return "{0}#{1}".format(cache_key, graph)
 
-    def get_data(self, doc):
+    def get_data(self, doc, subject, graph):
         data_dict = {}
         for p, o in zip(doc['p'], doc['o']):
             data_dict.setdefault(p, []).append(o)
