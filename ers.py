@@ -36,6 +36,7 @@ class ERSLocal(object):
 
     def delete_value(self, subject, graph):
         """delete value"""
+
         pass
 
     def get_data(self, subject, graph):
@@ -46,7 +47,7 @@ class ERSLocal(object):
         return None
 
     def get_annotation(entity):
-        # preferred teminology for user API is entity, property, value
+        # preferred terminology for user API is "entity, property, value"
         pass
 
     def get_doc(self, subject, graph):
@@ -56,10 +57,12 @@ class ERSLocal(object):
             return None
         raise Exception()
 
-    def get_value(self, subject, predicate, graph):
-        """get the value for a identifier+property (return null or a special value if it does not exist)"""
+    def get_values(self, subject, predicate, graph):
+        """ Get the value for a identifier+property (return null or a special value if it does not exist)
+            Return a list of values or an empty list
+        """
         data = self.get_data(subject, graph)
-        return data.get(predicate, None)        
+        return data.get(predicate, [])        
 
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
@@ -133,7 +136,7 @@ def test():
             ers.add_data(s, p, o, g)
         data = ers.get_data(s, g)
         assert set(data[p]) == objects
-        assert set(ers.get_value(s, p, g)) == objects
+        assert set(ers.get_values(s, p, g)) == objects
 
     for model in [ModelS(), ModelT()]:
         dbname = 'ers_' + model.__class__.__name__.lower()
