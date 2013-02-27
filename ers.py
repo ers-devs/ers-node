@@ -46,6 +46,10 @@ class ERSLocal(object):
             return self.model.get_data(doc)
         return None
 
+    def get_annotation(entity):
+        # preferred teminology for user API is entity, property, value
+        pass
+
     def get_doc(self, subject, graph):
         try:
             return self.db.get(self.model.couch_key(subject, graph))
@@ -122,7 +126,7 @@ def test():
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
         assert ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')['ok'] == True
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == False
-        s = 'urn:ers:meta:testSubject'
+        s = 'urn:ers:meta:testEntity'
         p = 'urn:ers:meta:predicates:hasValue'
         g = 'urn:ers:meta:testGraph'
         objects = set(['value 1', 'value 2'])
