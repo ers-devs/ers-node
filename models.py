@@ -50,9 +50,11 @@ class ModelS(LocalModelBase):
 
     def get_data(self, doc, subject, graph):
         data_dict = doc.copy()
-        data_dict.pop('_id', None)
         data_dict.pop('_rev', None)
-        return data_dict
+        g, s = data_dict.pop('_id', (None, None)).split(' ')
+        if g == graph and s == subject:
+            return data_dict
+        return {}
 
     def refresh_doc(self, couch_doc, cache):
         cache_data = cache[self.cache_key(couch_doc['_id'])]
@@ -99,6 +101,8 @@ class ModelT(LocalModelBase):
 
     def get_data(self, doc, subject, graph):
         data_dict = {}
+        if doc['s'] != subject or doc['g'] != graph:
+            return {}
         for p, o in zip(doc['p'], doc['o']):
             data_dict.setdefault(p, []).append(o)
         return data_dict
