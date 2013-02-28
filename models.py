@@ -33,6 +33,15 @@ class ModelS(LocalModelBase):
     }
 
     """
+    views_doc = {   "_id": "_design/models",
+                    "language": "javascript",
+                    "views": {
+                        "by_entity": {
+                            "map": "function(doc) {var a = doc._id.split(\" \"); if (a.length == 2 && a[1].length>0) {emit(a[1], a[0])}}"
+                        }
+                    }
+                }
+
     def cache_key(self, couch_key):
         return couch_key.split(' ')[1]
 
@@ -72,6 +81,16 @@ class ModelT(LocalModelBase):
         ]
     }
     """
+    views_doc = {
+                    "_id": "_design/modelt",
+                    "language": "javascript",
+                    "views": {
+                        "by_entity": {
+                            "map": "function(doc) {var separatorPosition = doc._id.lastIndexOf(\"#\"); if (separatorPosition > 0 && separatorPosition < doc._id.length - 1) {emit(doc._id.slice(0, separatorPosition), doc._id.slice(separatorPosition+1))}}"
+                        }
+                    }
+                }    
+
     def cache_key(self, couch_key):
         return couch_key.rsplit('#', 1)[0]
 
