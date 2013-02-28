@@ -117,7 +117,6 @@ class ERSLocal(ERSReadOnly):
         """update a value for an identifier+property (create it if it does not exist yet)"""
         pass
 
-
 def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
     def prepare_ers(model, dbname='ers_test'):
@@ -125,6 +124,7 @@ def test():
             server.delete_db(dbname)
         ers = ERSLocal(dbname=dbname, model=model)
         ers.import_nt('../tests/data/timbl.nt', 'timbl')
+        ers.db.save_doc(ers.model.views_doc, force_update=True)
         return ers
 
     def test_ers():
