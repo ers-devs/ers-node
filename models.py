@@ -33,7 +33,7 @@ class ModelS(LocalModelBase):
     }
 
     """
-    views_doc = {   "_id": "_design/models",
+    views_doc = {   "_id": "_design/index",
                     "language": "javascript",
                     "views": {
                         "by_entity": {
@@ -84,7 +84,7 @@ class ModelT(LocalModelBase):
     }
     """
     views_doc = {
-                    "_id": "_design/modelt",
+                    "_id": "_design/index",
                     "language": "javascript",
                     "views": {
                         "by_entity": {
