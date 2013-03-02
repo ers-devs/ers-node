@@ -23,14 +23,19 @@ class ERSReadOnly(object):
         self.db = self.server.get_db(dbname)
         self.model = model
 
-    def get_data(self, subject, graph):
+    def get_data(self, subject, graph=None):
         """get all property+values for an identifier"""
-        doc = self.get_doc(subject, graph)
-        if doc:
-            return self.model.get_data(doc, subject, graph)
-        return None
+        # FIXME: overwrites instead of merging values from different graphs
+        result = {}
+        if graph is None:
+            docs = [d['doc'] for d in self.db.view('index/by_entity', include_docs=True, key=subject)]
+        else:
+            docs = [self.get_doc(subject, graph)]
+        for doc in docs:
+            result.update(self.model.get_data(doc, subject, graph))
+        return result
 
-    def get_annotation(entity):
+    def get_annotation(self, entity):
         # preferred terminology for user API is "entity, property, value"
         pass
 
@@ -124,11 +129,12 @@ def test():
             server.delete_db(dbname)
         ers = ERSLocal(dbname=dbname, model=model)
         ers.import_nt('../tests/data/timbl.nt', 'timbl')
-        ers.db.save_doc(ers.model.views_doc, force_update=True)
+        ers.db.save_doc(ers.model.views_doc)
         return ers
 
     def test_ers():
         """Model independent tests"""
+        assert ers.db.doc_exist('_design/index')
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'bad_graph') == False
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
         assert ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')['ok'] == True
@@ -136,14 +142,22 @@ def test():
         s = 'urn:ers:meta:testEntity'
         p = 'urn:ers:meta:predicates:hasValue'
         g = 'urn:ers:meta:testGraph'
+        g2 = 'urn:ers:meta:testGraph2'
         objects = set(['value 1', 'value 2'])
+        objects2 = set(['value 3', 'value 4'])
         for o in objects:
             ers.add_data(s, p, o, g)
+        for o in objects2:
+            ers.add_data(s, "predicate:temp", o, g2)
         data = ers.get_data(s, g)
         assert set(data[p]) == objects
+        data2 = ers.get_data(s) # get data from all graphs
+        assert set(data2[p]) == objects
+        assert set(data2["predicate:temp"]) == objects2       
         assert set(ers.get_values(s, p, g)) == objects
 
     for model in [ModelS(), ModelT()]:
+#    for model in [ModelT()]:
         dbname = 'ers_' + model.__class__.__name__.lower()
         ers = prepare_ers(model, dbname)
         test_ers()

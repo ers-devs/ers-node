@@ -33,8 +33,8 @@ class ModelS(LocalModelBase):
     }
 
     """
-    views_doc = {   "_id": "_design/index",
-                    "language": "javascript",
+    views_doc = {   
+                    "_id": "_design/index",
                     "views": {
                         "by_entity": {
                             "map": "function(doc) {var a = doc._id.split(\" \"); if (a.length == 2 && a[1].length>0) {emit(a[1], a[0])}}"
@@ -49,10 +49,17 @@ class ModelS(LocalModelBase):
         return "{0} {1}".format(graph, cache_key)
 
     def get_data(self, doc, subject, graph):
+        """
+        Return property-value dictionary. Call with subject=None, graph=None to get data from a doc without an _id.
+        """
         data_dict = doc.copy()
         data_dict.pop('_rev', None)
-        g, s = data_dict.pop('_id', (None, None)).split(' ')
-        if g == graph and s == subject:
+        doc_id = data_dict.pop('_id', None)
+        if doc_id:
+            g, s = doc_id.split(' ')
+        else:
+            g = s = None
+        if (subject == s) and ((graph is None) or (graph == g)):
             return data_dict
         return {}
 
@@ -85,7 +92,6 @@ class ModelT(LocalModelBase):
     """
     views_doc = {
                     "_id": "_design/index",
-                    "language": "javascript",
                     "views": {
                         "by_entity": {
                             "map": "function(doc) {var separatorPosition = doc._id.lastIndexOf(\"#\"); if (separatorPosition > 0 && separatorPosition < doc._id.length - 1) {emit(doc._id.slice(0, separatorPosition), doc._id.slice(separatorPosition+1))}}"
@@ -101,7 +107,7 @@ class ModelT(LocalModelBase):
 
     def get_data(self, doc, subject, graph):
         data_dict = {}
-        if doc['s'] != subject or doc['g'] != graph:
+        if (subject != None) and ((doc['s'] != subject) or (graph != None and (doc['g'] != graph))):
             return {}
         for p, o in zip(doc['p'], doc['o']):
             data_dict.setdefault(p, []).append(o)
