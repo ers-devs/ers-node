@@ -8,6 +8,10 @@ from models import ModelS, ModelT
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 DEFAULT_MODEL = ModelS()
 
+def merge_annotations(a,b):
+    for key in set(a.keys() + b.keys()):
+        a.setdefault(key, []).extend(b.get(key, []))
+
 class EntityCache(defaultdict):
     """Equivalent to defaultdict(lambda: defaultdict(set))."""
     def __init__(self):
@@ -25,14 +29,13 @@ class ERSReadOnly(object):
 
     def get_data(self, subject, graph=None):
         """get all property+values for an identifier"""
-        # FIXME: overwrites instead of merging values from different graphs
         result = {}
         if graph is None:
             docs = [d['doc'] for d in self.db.view('index/by_entity', include_docs=True, key=subject)]
         else:
             docs = [self.get_doc(subject, graph)]
         for doc in docs:
-            result.update(self.model.get_data(doc, subject, graph))
+            merge_annotations(result, self.model.get_data(doc, subject, graph))
         return result
 
     def get_annotation(self, entity):
@@ -148,16 +151,15 @@ def test():
         for o in objects:
             ers.add_data(s, p, o, g)
         for o in objects2:
-            ers.add_data(s, "predicate:temp", o, g2)
+            ers.add_data(s, p, o, g2)
         data = ers.get_data(s, g)
         assert set(data[p]) == objects
         data2 = ers.get_data(s) # get data from all graphs
-        assert set(data2[p]) == objects
-        assert set(data2["predicate:temp"]) == objects2       
+        assert set(data2[p]) == objects.union(objects2)
         assert set(ers.get_values(s, p, g)) == objects
 
+
     for model in [ModelS(), ModelT()]:
-#    for model in [ModelT()]:
         dbname = 'ers_' + model.__class__.__name__.lower()
         ers = prepare_ers(model, dbname)
         test_ers()
