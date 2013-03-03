@@ -131,8 +131,10 @@ class ERSLocal(ERSReadWrite):
 
     def get_annotation(self, entity):
         # preferred terminology for user API is "entity, property, value"
-        pass
-
+        result = self.get_data(entity)
+        for remote in self.peers:
+            merge_annotations(result, remote.get_data(entity))
+        return result
 
 
 def test():
@@ -176,10 +178,17 @@ def test():
         test_ers()
 
     # Peer query
+    s = 'urn:ers:meta:testEntity'
+    p = 'urn:ers:meta:predicates:hasValue'
+    g3 = 'urn:ers:meta:testGraph3'
+    objects3 = set(['value 5', 'value 6'])
     ersremote = prepare_ers(DEFAULT_MODEL, 'ers_remote')
-    erslocal = ERSLocal(dbname='ers_models', neighbors=[(r'http://admin:admin@127.0.0.1:5984/', 'ers_remote')])
+    for o in objects3:
+        ersremote.add_data(s, p, o, g3)
 
- 
+    erslocal = ERSLocal(dbname='ers_models', neighbors=[(r'http://admin:admin@127.0.0.1:5984/', 'ers_remote')])
+    assert set(erslocal.get_annotation(s)[p]) == objects3.union(['value 4', 'value 1', 'value 2', 'value 3'])
+
     print "Tests pass"
 
 
