@@ -132,7 +132,8 @@ def test():
             server.delete_db(dbname)
         ers = ERSLocal(dbname=dbname, model=model)
         ers.import_nt('../tests/data/timbl.nt', 'timbl')
-        ers.db.save_doc(ers.model.views_doc)
+        view = ers.model.views_doc.copy()  # avoid writing _rev to the view_doc
+        ers.db.save_doc(view)
         return ers
 
     def test_ers():
