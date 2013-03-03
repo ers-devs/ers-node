@@ -38,10 +38,6 @@ class ERSReadOnly(object):
             merge_annotations(result, self.model.get_data(doc, subject, graph))
         return result
 
-    def get_annotation(self, entity):
-        # preferred terminology for user API is "entity, property, value"
-        pass
-
     def get_doc(self, subject, graph):
         try:
             return self.db.get(self.model.couch_key(subject, graph))
@@ -60,7 +56,7 @@ class ERSReadOnly(object):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
 
 
-class ERSLocal(ERSReadOnly):
+class ERSReadWrite(ERSReadOnly):
     def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL):
         self.server = couchdbkit.Server(serverURL)
         self.db = self.server.get_or_create_db(dbname)
@@ -125,6 +121,20 @@ class ERSLocal(ERSReadOnly):
         """update a value for an identifier+property (create it if it does not exist yet)"""
         pass
 
+class ERSLocal(ERSReadWrite):
+    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL, neighbors = []):
+        super(ERSLocal, self).__init__(serverURL, dbname, model)
+        self.peers = []
+        for peer_server, peer_db_name in neighbors:
+            peer_ers = ERSReadOnly(serverURL=peer_server, dbname=peer_db_name, model=DEFAULT_MODEL)
+            self.peers.append(peer_ers)
+
+    def get_annotation(self, entity):
+        # preferred terminology for user API is "entity, property, value"
+        pass
+
+
+
 def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
     def prepare_ers(model, dbname='ers_test'):
@@ -164,6 +174,11 @@ def test():
         dbname = 'ers_' + model.__class__.__name__.lower()
         ers = prepare_ers(model, dbname)
         test_ers()
+
+    # Peer query
+    ersremote = prepare_ers(DEFAULT_MODEL, 'ers_remote')
+    erslocal = ERSLocal(dbname='ers_models', neighbors=[(r'http://admin:admin@127.0.0.1:5984/', 'ers_remote')])
+
  
     print "Tests pass"
 
