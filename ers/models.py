@@ -37,7 +37,7 @@ class ModelS(LocalModelBase):
                     "_id": "_design/index",
                     "views": {
                         "by_entity": {
-                            "map": "function(doc) {var a = doc._id.split(\" \"); if (a.length == 2 && a[1].length>0) {emit(a[1], a[0])}}"
+                            "map": "function(doc) {var a = doc._id.split(\" \"); if (a.length == 2 && a[1].length>0) {emit(a[1], {'rev': doc._rev, 'g': a[0]})}}"
                         }
                     }
                 }
@@ -94,7 +94,7 @@ class ModelT(LocalModelBase):
                     "_id": "_design/index",
                     "views": {
                         "by_entity": {
-                            "map": "function(doc) {var separatorPosition = doc._id.lastIndexOf(\"#\"); if (separatorPosition > 0 && separatorPosition < doc._id.length - 1) {emit(doc._id.slice(0, separatorPosition), doc._id.slice(separatorPosition+1))}}"
+                            "map": "function(doc) {var separatorPosition = doc._id.lastIndexOf('#'); if (separatorPosition > 0 && separatorPosition < doc._id.length - 1) {emit(doc._id.slice(0, separatorPosition), {'rev': doc._rev, 'g': doc._id.slice(separatorPosition+1)})}}"
                         }
                     }
                 }    

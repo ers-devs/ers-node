@@ -136,6 +136,11 @@ class ERSLocal(ERSReadWrite):
             merge_annotations(result, remote.get_data(entity))
         return result
 
+    def get_values(self, entity, prop):
+        entity_data = self.get_annotation(entity)
+        return entity_data.get(prop, [])
+
+
 
 def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
