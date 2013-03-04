@@ -57,7 +57,8 @@ class ERSReadOnly(object):
 
 
 class ERSReadWrite(ERSReadOnly):
-    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL):
+    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/',
+                 dbname='ers', model = DEFAULT_MODEL):
         self.server = couchdbkit.Server(serverURL)
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
@@ -68,9 +69,17 @@ class ERSReadWrite(ERSReadOnly):
         triples.add(s,p,o)
         self.write_cache(triples, g)
 
-    def delete_entity(self, subject, graph):
-        """delete ids"""
-        return self.db.delete_doc(self.model.couch_key(subject, graph))
+    def delete_entity(self, entity, graph=None):
+        """delete ids."""
+        # Assumes there is only one entity per doc.
+        if graph is None:
+            docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
+                        for r in self.db.view('index/by_entity', key=entity)]
+        else:
+            docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
+                        for r in self.db.view('index/by_entity', key=entity)
+                            if r['value']['g'] == graph]
+        return self.db.save_docs(docs)
 
     def delete_value(self, subject, graph):
         """delete value"""
@@ -130,7 +139,6 @@ class ERSLocal(ERSReadWrite):
             self.peers.append(peer_ers)
 
     def get_annotation(self, entity):
-        # preferred terminology for user API is "entity, property, value"
         result = self.get_data(entity)
         for remote in self.peers:
             merge_annotations(result, remote.get_data(entity))
@@ -158,7 +166,7 @@ def test():
         assert ers.db.doc_exist('_design/index')
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'bad_graph') == False
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
-        assert ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')['ok'] == True
+        ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == False
         s = 'urn:ers:meta:testEntity'
         p = 'urn:ers:meta:predicates:hasValue'
@@ -174,8 +182,6 @@ def test():
         assert set(data[p]) == objects
         data2 = ers.get_data(s) # get data from all graphs
         assert set(data2[p]) == objects.union(objects2)
-        assert set(ers.get_values(s, p, g)) == objects
-
 
     for model in [ModelS(), ModelT()]:
         dbname = 'ers_' + model.__class__.__name__.lower()
@@ -183,16 +189,21 @@ def test():
         test_ers()
 
     # Peer query
-    s = 'urn:ers:meta:testEntity'
+    entity = 'urn:ers:meta:testEntity'
     p = 'urn:ers:meta:predicates:hasValue'
     g3 = 'urn:ers:meta:testGraph3'
-    objects3 = set(['value 5', 'value 6'])
+    remote_objects = set(['value 5', 'value 6'])
+    local_objects = set(['value 1', 'value 2', 'value 3', 'value 4'])
+    all_objects = local_objects.union(remote_objects)
     ersremote = prepare_ers(DEFAULT_MODEL, 'ers_remote')
-    for o in objects3:
-        ersremote.add_data(s, p, o, g3)
+    for o in remote_objects:
+        ersremote.add_data(entity, p, o, g3)
 
     erslocal = ERSLocal(dbname='ers_models', neighbors=[(r'http://admin:admin@127.0.0.1:5984/', 'ers_remote')])
-    assert set(erslocal.get_annotation(s)[p]) == objects3.union(['value 4', 'value 1', 'value 2', 'value 3'])
+    assert set(erslocal.get_annotation(entity)[p]) == all_objects
+    assert set(erslocal.get_values(entity, p)) == all_objects
+    erslocal.delete_entity(entity)
+    assert set(erslocal.get_annotation(entity)[p]) == remote_objects
 
     print "Tests pass"
 
