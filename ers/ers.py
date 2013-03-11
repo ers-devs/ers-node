@@ -61,7 +61,7 @@ class ERSReadOnly(object):
 class ERSReadWrite(ERSReadOnly):
     def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', db_name='ers', model=DEFAULT_MODEL):
         self.server = couchdbkit.Server(server_url)
-        self.db = self.server.get_db(db_name)
+        self.db = self.server.get_or_create_db(db_name)
         self.model = model
 
     def add_data(self, s, p, o, g):
