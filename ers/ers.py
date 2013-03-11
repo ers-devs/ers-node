@@ -47,7 +47,7 @@ class ERSReadOnly(object):
         except couchdbkit.exceptions.ResourceNotFound: 
             return None
 
-    def get_values(self, subject, predicate, graph):
+    def get_values(self, subject, predicate, graph=None):
         """ Get the value for a identifier+property (return null or a special value if it does not exist)
             Return a list of values or an empty list
         """
