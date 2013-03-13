@@ -48,6 +48,9 @@ class ModelS(LocalModelBase):
     def couch_key(self, cache_key, graph):
         return "{0} {1}".format(graph, cache_key)
 
+    def delete_property(self, couch_doc, prop):
+        couch_doc.pop(prop, [])
+
     def get_data(self, doc, subject, graph):
         """
         Return property-value dictionary. Call with subject=None, graph=None to get data from a doc without an _id.
@@ -104,6 +107,9 @@ class ModelT(LocalModelBase):
 
     def couch_key(self, cache_key, graph):
         return "{0}#{1}".format(cache_key, graph)
+
+    def delete_property(self, couch_doc, prop):
+        couch_doc['p'], couch_doc['o'] = zip(*[(p, o) for p, o in zip(couch_doc['p'], couch_doc['o']) if p != prop])
 
     def get_data(self, doc, subject, graph):
         data_dict = {}

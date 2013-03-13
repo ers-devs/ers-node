@@ -89,7 +89,7 @@ class ERSReadWrite(ERSReadOnly):
             docs = [r['doc'] for r in self.db.view('index/by_entity', key=entity, include_docs=True)
                              if r['value']['g'] == graph]
         for doc in docs:
-            doc.pop(prop, [])
+            self.model.delete_property(doc, prop)
         return self.db.save_docs(docs)        
 
     def import_nt(self, file_name, target_graph):
@@ -186,6 +186,9 @@ def test():
         assert set(data[p]) == objects
         data2 = ers.get_data(s) # get data from all graphs
         assert set(data2[p]) == local_objects
+        ers.delete_value(entity, p2)
+        assert p2 not in ers.get_annotation(entity)
+
 
     # Test data
     s = entity = 'urn:ers:meta:testEntity'
