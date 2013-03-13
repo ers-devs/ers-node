@@ -159,58 +159,64 @@ class ERSLocal(ERSReadWrite):
 
 def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
-    def prepare_ers(model, dbname='ers_test'):
-        if dbname in server:
-            server.delete_db(dbname)
-        ers = ERSLocal(dbname=dbname, model=model)
-        ers.import_nt('../../tests/data/timbl.nt', 'timbl')
-        view = ers.model.views_doc.copy()  # avoid writing _rev to the view_doc
-        ers.db.save_doc(view)
-        return ers
 
+    def create_ers(dbname, model=DEFAULT_MODEL):
+        if dbname in server:
+            server.delete_db(dbname)           
+        ers_new = ERSLocal(dbname=dbname, model=model)
+        view = ers_new.model.views_doc.copy()  # avoid writing _rev to the view_doc
+        ers_new.db.save_doc(view)
+        return ers_new
+ 
     def test_ers():
         """Model independent tests"""
+        ers.import_nt('../../tests/data/timbl.nt', 'timbl')
         assert ers.db.doc_exist('_design/index')
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'bad_graph') == False
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == True
         ers.delete_entity('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl')
         assert ers.exist('http://www4.wiwiss.fu-berlin.de/booksMeshup/books/006251587X', 'timbl') == False
-        s = 'urn:ers:meta:testEntity'
-        p = 'urn:ers:meta:predicates:hasValue'
-        g = 'urn:ers:meta:testGraph'
-        g2 = 'urn:ers:meta:testGraph2'
-        objects = set(['value 1', 'value 2'])
-        objects2 = set(['value 3', 'value 4'])
         for o in objects:
             ers.add_data(s, p, o, g)
+            ers.add_data(s, p2, o, g)
         for o in objects2:
             ers.add_data(s, p, o, g2)
+            ers.add_data(s, p2, o, g)
         data = ers.get_data(s, g)
         assert set(data[p]) == objects
         data2 = ers.get_data(s) # get data from all graphs
-        assert set(data2[p]) == objects.union(objects2)
+        assert set(data2[p]) == local_objects
 
+    # Test data
+    s = entity = 'urn:ers:meta:testEntity'
+    p = 'urn:ers:meta:predicates:hasValue'
+    p2 = 'urn:ers:meta:predicates:property'
+    g = 'urn:ers:meta:testGraph'
+    g2 = 'urn:ers:meta:testGraph2'
+    g3 = 'urn:ers:meta:testGraph3'
+    objects = set(['value 1', 'value 2'])
+    objects2 = set(['value 3', 'value 4'])
+    local_objects = objects | objects2
+    remote_objects = set(['value 5', 'value 6'])
+    all_objects = local_objects | remote_objects
+
+    # Test local ers using differend document models
     for model in [ModelS(), ModelT()]:
         dbname = 'ers_' + model.__class__.__name__.lower()
-        ers = prepare_ers(model, dbname)
+        ers = create_ers(dbname, model)
         test_ers()
 
-    # Peer query
-    entity = 'urn:ers:meta:testEntity'
-    p = 'urn:ers:meta:predicates:hasValue'
-    g3 = 'urn:ers:meta:testGraph3'
-    remote_objects = set(['value 5', 'value 6'])
-    local_objects = set(['value 1', 'value 2', 'value 3', 'value 4'])
-    all_objects = local_objects.union(remote_objects)
-    ersremote = prepare_ers(DEFAULT_MODEL, 'ers_remote')
+    # Prepare remote ers
+    ers_remote = create_ers('ers_remote')
     for o in remote_objects:
-        ersremote.add_data(entity, p, o, g3)
+        ers_remote.add_data(entity, p, o, g3)
 
-    erslocal = ERSLocal(dbname='ers_models', neighbors=[(r'http://admin:admin@127.0.0.1:5984/', 'ers_remote')])
-    assert set(erslocal.get_annotation(entity)[p]) == all_objects
-    assert set(erslocal.get_values(entity, p)) == all_objects
-    erslocal.delete_entity(entity)
-    assert set(erslocal.get_annotation(entity)[p]) == remote_objects
+    # Query remote
+    ers_local = ERSLocal(dbname='ers_models', neighbors=[(r'http://admin:admin@127.0.0.1:5984/', 'ers_remote')])
+    assert set(ers_local.get_annotation(entity)[p]) == all_objects
+    assert set(ers_local.get_values(entity, p)) == all_objects
+    ers_local.delete_entity(entity)
+    assert set(ers_local.get_annotation(entity)[p]) == remote_objects
 
     print "Tests pass"
 
