@@ -8,9 +8,11 @@ from models import ModelS, ModelT
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 DEFAULT_MODEL = ModelS()
 
+
 def merge_annotations(a, b):
     for key in set(a.keys() + b.keys()):
         a.setdefault(key, []).extend(b.get(key, []))
+
 
 class EntityCache(defaultdict):
     """Equivalent to defaultdict(lambda: defaultdict(set))."""
@@ -21,9 +23,10 @@ class EntityCache(defaultdict):
         """Add <s, p, o> to cache."""
         self[s][p].add(o)
 
+
 class ERSReadOnly(object):
-    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL):
-        self.server = couchdbkit.Server(serverURL)
+    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL):
+        self.server = couchdbkit.Server(server_url)
         self.db = self.server.get_db(dbname)
         self.model = model
 
@@ -43,9 +46,8 @@ class ERSReadOnly(object):
             return self.db.get(self.model.couch_key(subject, graph))
         except couchdbkit.exceptions.ResourceNotFound: 
             return None
-        raise Exception()
 
-    def get_values(self, subject, predicate, graph):
+    def get_values(self, subject, predicate, graph=None):
         """ Get the value for a identifier+property (return null or a special value if it does not exist)
             Return a list of values or an empty list
         """
@@ -57,16 +59,16 @@ class ERSReadOnly(object):
 
 
 class ERSReadWrite(ERSReadOnly):
-    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/',
-                 dbname='ers', model = DEFAULT_MODEL):
-        self.server = couchdbkit.Server(serverURL)
+    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/',
+                 dbname='ers', model=DEFAULT_MODEL):
+        self.server = couchdbkit.Server(server_url)
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
 
     def add_data(self, s, p, o, g):
         """Adds the value for the given property in the given entity. Create the entity if it does not exist yet)"""
         triples = EntityCache()
-        triples.add(s,p,o)
+        triples.add(s, p, o)
         self.write_cache(triples, g)
 
     def delete_entity(self, entity, graph=None):
@@ -74,11 +76,11 @@ class ERSReadWrite(ERSReadOnly):
         # Assumes there is only one entity per doc.
         if graph is None:
             docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                        for r in self.db.view('index/by_entity', key=entity)]
+                    for r in self.db.view('index/by_entity', key=entity)]
         else:
             docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                        for r in self.db.view('index/by_entity', key=entity)
-                            if r['value']['g'] == graph]
+                    for r in self.db.view('index/by_entity', key=entity)
+                    if r['value']['g'] == graph]
         return self.db.save_docs(docs)
 
     def delete_value(self, entity, prop, graph=None):
@@ -109,7 +111,7 @@ class ERSReadWrite(ERSReadOnly):
                 o = triple[2][1:].rsplit('>')[0]
             else:
                 o = triple[2].split(' ')[0] # might be a named node
-            cache.add(s,p,o)
+            cache.add(s, p, o)
         self.write_cache(cache, target_graph)
 
     def import_nt_rdflib(self, file_name, target_graph):
@@ -139,11 +141,11 @@ class ERSReadWrite(ERSReadOnly):
 
 
 class ERSLocal(ERSReadWrite):
-    def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL, neighbors = []):
-        super(ERSLocal, self).__init__(serverURL, dbname, model)
+    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL, neighbors=[]):
+        super(ERSLocal, self).__init__(server_url, dbname, model)
         self.peers = []
         for peer_server, peer_db_name in neighbors:
-            peer_ers = ERSReadOnly(serverURL=peer_server, dbname=peer_db_name, model=DEFAULT_MODEL)
+            peer_ers = ERSReadOnly(server_url=peer_server, dbname=peer_db_name, model=DEFAULT_MODEL)
             self.peers.append(peer_ers)
 
     def get_annotation(self, entity):
