@@ -81,9 +81,16 @@ class ERSReadWrite(ERSReadOnly):
                             if r['value']['g'] == graph]
         return self.db.save_docs(docs)
 
-    def delete_value(self, subject, graph):
-        """delete value"""
-        pass
+    def delete_value(self, entity, prop, graph=None):
+        """Deletes all of the user's values for the given property in the given entity."""
+        if graph is None:
+            docs = [r['doc'] for r in self.db.view('index/by_entity', key=entity, include_docs=True)]
+        else:
+            docs = [r['doc'] for r in self.db.view('index/by_entity', key=entity, include_docs=True)
+                             if r['value']['g'] == graph]
+        for doc in docs:
+            doc.pop(prop, [])
+        return self.db.save_docs(docs)        
 
     def import_nt(self, file_name, target_graph):
         """Import N-Triples file."""
