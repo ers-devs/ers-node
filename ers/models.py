@@ -11,7 +11,10 @@ class LocalModelBase(object):
     def get_data(self, doc, subject, graph):
         pass
         
-    def refresh_doc(self, couch_doc, cache):
+    def add_data(self, couch_doc, cache):
+        pass
+
+    def delete_property(self, couch_doc, prop):
         pass
 
 
@@ -66,7 +69,7 @@ class ModelS(LocalModelBase):
             return data_dict
         return {}
 
-    def refresh_doc(self, couch_doc, cache):
+    def add_data(self, couch_doc, cache):
         cache_data = cache[self.cache_key(couch_doc['_id'])]
         for p, oo in cache_data.iteritems():
             couch_doc[p] = list(oo.union(couch_doc.get(p, [])))
@@ -119,7 +122,7 @@ class ModelT(LocalModelBase):
             data_dict.setdefault(p, []).append(o)
         return data_dict
 
-    def refresh_doc(self, couch_doc, cache):
+    def add_data(self, couch_doc, cache):
         s, g = couch_doc['_id'].rsplit('#', 1)
         couch_doc['g'] = g
         couch_doc['s'] = s
@@ -137,5 +140,5 @@ class ModelH(ModelT):
     def couch_key(self, cache_key, graph):
         pass
 
-    def refresh_doc(self, couch_doc, cache):
+    def add_data(self, couch_doc, cache):
         pass

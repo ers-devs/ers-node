@@ -8,7 +8,7 @@ from models import ModelS, ModelT
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 DEFAULT_MODEL = ModelS()
 
-def merge_annotations(a,b):
+def merge_annotations(a, b):
     for key in set(a.keys() + b.keys()):
         a.setdefault(key, []).extend(b.get(key, []))
 
@@ -129,13 +129,14 @@ class ERSReadWrite(ERSReadOnly):
                                   keys=[self.model.couch_key(k, graph) for k in cache])
         for doc in couch_docs:
             couch_doc = doc.get('doc', {'_id': doc['key']})
-            self.model.refresh_doc(couch_doc, cache)
+            self.model.add_data(couch_doc, cache)
             docs.append(couch_doc)
         self.db.save_docs(docs)
 
     def update_value(self, subject, object, graph=None):
         """update a value for an identifier+property (create it if it does not exist yet)"""
         pass
+
 
 class ERSLocal(ERSReadWrite):
     def __init__(self, serverURL=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model = DEFAULT_MODEL, neighbors = []):
@@ -154,7 +155,6 @@ class ERSLocal(ERSReadWrite):
     def get_values(self, entity, prop):
         entity_data = self.get_annotation(entity)
         return entity_data.get(prop, [])
-
 
 
 def test():
@@ -181,7 +181,8 @@ def test():
             ers.add_data(s, p2, o, g)
         for o in objects2:
             ers.add_data(s, p, o, g2)
-            ers.add_data(s, p2, o, g)
+            ers.add_data(s, p2, o, g2)
+        # assert False
         data = ers.get_data(s, g)
         assert set(data[p]) == objects
         data2 = ers.get_data(s) # get data from all graphs
