@@ -64,13 +64,13 @@ class ERSReadWrite(ERSReadOnly):
         self.model = model
 
     def add_data(self, s, p, o, g):
-        """add a property+value to an identifier (create it if it does not exist yet)"""
+        """Adds the value for the given property in the given entity. Create the entity if it does not exist yet)"""
         triples = EntityCache()
         triples.add(s,p,o)
         self.write_cache(triples, g)
 
     def delete_entity(self, entity, graph=None):
-        """delete ids."""
+        """Deletes the entity."""
         # Assumes there is only one entity per doc.
         if graph is None:
             docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
