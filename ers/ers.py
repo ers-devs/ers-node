@@ -99,7 +99,6 @@ class ERSReadWrite(ERSReadOnly):
         cache = EntityCache()
         input_doc = open(file_name, "r")
         for input_line in input_doc:
-             # parsing a triple @@FIXME: employ real NTriples parser here!
             triple = input_line.split(None, 2) # assumes SPO is separated by any whitespace string with leading and trailing spaces ignored
             s = triple[0][1:-1] # get rid of the <>, naively assumes no bNodes for now
             p = triple[1][1:-1] # get rid of the <>
@@ -141,7 +140,7 @@ class ERSReadWrite(ERSReadOnly):
 
 
 class ERSLocal(ERSReadWrite):
-    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL, neighbors=[]):
+    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL, neighbors=()):
         super(ERSLocal, self).__init__(server_url, dbname, model)
         self.peers = []
         for peer_server, peer_db_name in neighbors:
@@ -184,7 +183,6 @@ def test():
         for o in objects2:
             ers.add_data(s, p, o, g2)
             ers.add_data(s, p2, o, g2)
-        # assert False
         data = ers.get_data(s, g)
         assert set(data[p]) == objects
         data2 = ers.get_data(s) # get data from all graphs
