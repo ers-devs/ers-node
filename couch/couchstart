@@ -4,3 +4,10 @@ echo "Starting CouchDB from $DIR"
 cd "$DIR"
 mkdir couchdata 2> /dev/null
 couchdb  -b -a local.ini -p couchdata/couch.pid -o couchdata/couch.stdout -e couchdata/couch.stderr
+
+PORT=`cat local.ini | grep '^port *' | cut -d= -f2`
+if [ -n `which avahi-publish` ] ; then
+    avahi-publish -s `hostname -s` _ers._tcp $PORT 2>/dev/null & echo $! > couchdata/avahi-publish.pid
+elif [ -n `which dns-sd` ] ; then
+    dns-sd -R `hostname -s` _ers._tcp local $PORT 2>/dev/null & echo $! > couchdata/avahi-publish.pid
+fi

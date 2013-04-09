@@ -8,3 +8,9 @@ then
 else
   echo "CouchDB is not running or was started from an other directory."
 fi
+AP_PID="$DIR/couchdata/avahi-publish.pid"
+if [ -f "$AP_PID" ]
+then
+  kill -15 `cat "$AP_PID"`
+  rm "$AP_PID"
+fi
