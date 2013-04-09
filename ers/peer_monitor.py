@@ -19,7 +19,8 @@ _thread = None
 def get_peers():
     result = []
     with _lock:
-        result = [(name,) + peer_info for name, peer_info in _peers.items()]
+        for peer_info in _peers.values():
+            result.append(dict(peer_info))
 
     return result
 
@@ -61,7 +62,7 @@ def _main_thread():
 
 def _on_peer_join(peer_name, host, port):
     with _lock:
-        _peers[peer_name] = (host, port)
+        _peers[peer_name] = { 'name': peer_name, 'host': host, 'port': port }
 
 
 def _on_peer_leave(peer_name):
@@ -138,11 +139,12 @@ def _report_error(error):
 
 def test():
     print "This test runs continuously, use Ctrl+C to exit"
-    prev_peers = [('dummy',)]
+    prev_peers = None
 
     while True:
         time.sleep(0.5)
-        peers = sorted(get_peers())
+        peers = get_peers()
+        peers.sort(key=lambda p: p['name'])
 
         if peers != prev_peers:
             print "Peers now:", peers

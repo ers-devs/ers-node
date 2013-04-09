@@ -2,6 +2,7 @@
 
 import couchdbkit
 import rdflib
+import peer_monitor
 from collections import defaultdict
 from models import ModelS, ModelT
                                                         
@@ -140,22 +141,38 @@ class ERSReadWrite(ERSReadOnly):
 
 
 class ERSLocal(ERSReadWrite):
-    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL, neighbors=()):
+    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL,
+                fixed_peers=()):
         super(ERSLocal, self).__init__(server_url, dbname, model)
-        self.peers = []
-        for peer_server, peer_db_name in neighbors:
-            peer_ers = ERSReadOnly(server_url=peer_server, dbname=peer_db_name, model=DEFAULT_MODEL)
-            self.peers.append(peer_ers)
+        self.fixed_peers = fixed_peers
 
     def get_annotation(self, entity):
         result = self.get_data(entity)
-        for remote in self.peers:
+        for remote in self.get_peer_ers_interfaces():
             merge_annotations(result, remote.get_data(entity))
         return result
 
     def get_values(self, entity, prop):
         entity_data = self.get_annotation(entity)
         return entity_data.get(prop, [])
+
+    def get_peer_ers_interfaces(self):
+        result = []
+
+        for peer_info in self.fixed_peers + peer_monitor.get_peers():
+            if 'url' in peer_info:
+                server_url = peer_info['url']
+            elif 'host' in peer_info and 'port' in peer_info:
+                server_url = r'http://admin:admin@' + peer_info['host'] + ':' + str(peer_info['port']) + '/'
+            else:
+                continue
+
+            dbname = peer_info['dbname'] if 'dbname' in peer_info else None
+
+            peer_ers = ERSReadOnly(server_url, dbname)
+            result.append(peer_ers)
+
+        return result
 
 
 def test():
@@ -216,7 +233,8 @@ def test():
         ers_remote.add_data(entity, p, o, g3)
 
     # Query remote
-    ers_local = ERSLocal(dbname='ers_models', neighbors=[(r'http://admin:admin@127.0.0.1:5984/', 'ers_remote')])
+    ers_local = ERSLocal(dbname='ers_models', fixed_peers=[{'url': r'http://admin:admin@127.0.0.1:5984/',
+                                                            'dbname': 'ers_remote'}])
     assert set(ers_local.get_annotation(entity)[p]) == all_objects
     assert set(ers_local.get_values(entity, p)) == all_objects
     ers_local.delete_entity(entity)
