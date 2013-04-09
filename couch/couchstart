@@ -7,7 +7,7 @@ couchdb  -b -a local.ini -p couchdata/couch.pid -o couchdata/couch.stdout -e cou
 
 PORT=`cat local.ini | grep '^port *' | cut -d= -f2`
 if [ -n `which avahi-publish` ] ; then
-    avahi-publish -s `hostname -s` _ers._tcp $PORT 2>/dev/null & echo $! > couchdata/avahi-publish.pid
+    avahi-publish -s "ERS on `hostname -s`" _ers._tcp $PORT 2>/dev/null & echo $! > couchdata/avahi-publish.pid
 elif [ -n `which dns-sd` ] ; then
-    dns-sd -R `hostname -s` _ers._tcp local $PORT 2>/dev/null & echo $! > couchdata/avahi-publish.pid
+    dns-sd -R "ERS on `hostname -s`" _ers._tcp local $PORT 2>/dev/null & echo $! > couchdata/avahi-publish.pid
 fi
