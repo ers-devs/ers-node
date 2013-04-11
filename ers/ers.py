@@ -144,7 +144,7 @@ class ERSLocal(ERSReadWrite):
     def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL,
                 fixed_peers=()):
         super(ERSLocal, self).__init__(server_url, dbname, model)
-        self.fixed_peers = fixed_peers
+        self.fixed_peers = list(fixed_peers)
 
     def get_annotation(self, entity):
         result = self.get_data(entity)
