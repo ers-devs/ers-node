@@ -11,7 +11,6 @@ ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
 
 
 _peers = None
-_my_hostname = socket.gethostname()
 _lock = None
 _thread = None
 
@@ -31,6 +30,10 @@ def command_exists(command):
         return True
     except subprocess.CalledProcessError:
         return False
+
+
+def is_my_host(hostname):
+    return socket.gethostname().partition('.')[0] == hostname.partition('.')[0]
 
 
 def _main_thread():
@@ -90,7 +93,8 @@ def _handle_line_avahi(line):
         host = parts[6]
         port = int(parts[8])
         dbname = _extract_dbname(service_name)
-        _on_peer_join(service_name, host, port, dbname)
+        if not is_my_host(host):
+            _on_peer_join(service_name, host, port, dbname)
     elif operation == '-':
         _on_peer_leave(service_name)
 
@@ -105,7 +109,7 @@ def _handle_line_dns_sd(line):
 
     if operation == 'Add':
         host, port, dbname = _lookup_dns_sd(service_name)
-        if host is not None:
+        if host is not None and not is_my_host(host):
             _on_peer_join(service_name, host, port, dbname)
     elif operation == 'Rmv':
         _on_peer_leave(service_name)
