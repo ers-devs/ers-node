@@ -159,7 +159,7 @@ class ERSLocal(ERSReadWrite):
     def get_peer_ers_interfaces(self):
         result = []
 
-        for peer_info in self.fixed_peers: #+ peer_monitor.get_peers():
+        for peer_info in self.fixed_peers + peer_monitor.get_peers():
             if 'url' in peer_info:
                 server_url = peer_info['url']
             elif 'host' in peer_info and 'port' in peer_info:
