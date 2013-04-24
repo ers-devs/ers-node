@@ -65,6 +65,8 @@ class ERSReadWrite(ERSReadOnly):
         self.server = couchdbkit.Server(server_url)
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
+        if not self.db.doc_exist('_design/index'):
+            self.db.save_doc(self.model.index_doc())
 
     def add_data(self, s, p, o, g):
         """Adds the value for the given property in the given entity. Create the entity if it does not exist yet)"""
@@ -182,8 +184,6 @@ def test():
         if dbname in server:
             server.delete_db(dbname)           
         ers_new = ERSLocal(dbname=dbname, model=model)
-        view = ers_new.model.views_doc.copy()  # avoid writing _rev to the view_doc
-        ers_new.db.save_doc(view)
         return ers_new
  
     def test_ers():
