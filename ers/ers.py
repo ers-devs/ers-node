@@ -103,8 +103,10 @@ class ERSReadOnly(object):
 
 class ERSReadWrite(ERSReadOnly):
     def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/',
-                 dbname='ers', model=DEFAULT_MODEL):
+                 dbname='ers', model=DEFAULT_MODEL, reset_database=False):
         self.server = couchdbkit.Server(server_url)
+        if reset_database and dbname in self.server:
+            self.server.delete_db(dbname)
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
         if not self.db.doc_exist('_design/index'):
@@ -170,8 +172,8 @@ class ERSReadWrite(ERSReadOnly):
 
 class ERSLocal(ERSReadWrite):
     def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL,
-                fixed_peers=()):
-        super(ERSLocal, self).__init__(server_url, dbname, model)
+                fixed_peers=(), reset_database=False):
+        super(ERSLocal, self).__init__(server_url, dbname, model, reset_database)
         self.fixed_peers = list(fixed_peers)
 
     def get_annotation(self, entity):
