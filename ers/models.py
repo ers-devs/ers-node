@@ -46,7 +46,10 @@ class ModelS(LocalModelBase):
                     "_id": "_design/index",
                     "views": {
                         "by_entity": {
-                            "map": "function(doc) {var a = doc._id.split(' '); if (a.length == 2 && a[1].length>0) {emit(a[1], {'rev': doc._rev, 'g': a[0]})}}"
+                            "map": "function(doc) {var a = doc._id.split(' '); if (a.length == 2 && a[1].length > 0) {emit(a[1], {'rev': doc._rev, 'g': a[0]})}}"
+                        },
+                        "by_property_value": {
+                            "map": "function(doc) {\n  var a = doc._id.split(' '); \n  if (a.length == 2 && a[1].length > 0) {\n    for (property in doc) {\n      if (property[0] != '_') {\n        doc[property].forEach(function(value) {emit([property, value], null)});\n      }\n    }\n  }\n}\n"
                         }
                     }
                 }
