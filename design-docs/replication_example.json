@@ -1,8 +1,0 @@
-{
-   "_id": "replication_example",
-   "source": "optimized_linkedmdb",
-   "target": "http://admin:admin@localhost:5984/replicated_linkedmdb",
-   "filter": "filter/underscore",
-   "continuous": false,
-   "create_target": true
-}
