@@ -98,8 +98,8 @@ class ERSReadOnly(object):
         return data.get(predicate, [])
 
     def search(self, prop, value=None):
-        """ Search entities by property+value
-            Return a list (entity, graph) pairs.
+        """ Search entities by property or property+value
+            Return a list of [entity, graph] pairs.
         """
         if value is None:
             result = [r['value'] for r in self.db.view('index/by_property_value', startkey=[prop], endkey=[prop, {}])]
