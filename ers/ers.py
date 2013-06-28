@@ -98,13 +98,13 @@ class ERSReadOnly(object):
         return data.get(predicate, [])
 
     def search(self, prop, value=None):
-        """ Search entities by property or property+value
-            Return a list of [entity, graph] pairs.
+        """ Search local entities by property or property+value
+            Return a list of (entity, graph) pairs.
         """
         if value is None:
-            result = [r['value'] for r in self.db.view('index/by_property_value', startkey=[prop], endkey=[prop, {}])]
+            result = [tuple(r['value']) for r in self.db.view('index/by_property_value', startkey=[prop], endkey=[prop, {}])]
         else:
-            result = [r['value'] for r in self.db.view('index/by_property_value', key=[prop, value])]
+            result = [tuple(r['value']) for r in self.db.view('index/by_property_value', key=[prop, value])]
         return result      
 
     def exist(self, subject, graph):
@@ -191,6 +191,15 @@ class ERSLocal(ERSReadWrite):
         for remote in self.get_peer_ers_interfaces():
             merge_annotations(result, remote.get_data(entity))
         return result
+
+    def search(self, prop, value=None):
+        """ Search entities by property or property+value
+            Return a list of unique (entity, graph) pairs.
+        """
+        result = set(super(ERSLocal, self).search(prop, value))
+        for remote in self.get_peer_ers_interfaces():
+            result.update(remote.search(prop, value))
+        return list(result)
 
     def get_values(self, entity, prop):
         entity_data = self.get_annotation(entity)
