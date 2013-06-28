@@ -95,7 +95,17 @@ class ERSReadOnly(object):
             Return a list of values or an empty list
         """
         data = self.get_data(subject, graph)
-        return data.get(predicate, [])        
+        return data.get(predicate, [])
+
+    def search(self, prop, value=None):
+        """ Search entities by property+value
+            Return a list (entity, graph) pairs.
+        """
+        if value is None:
+            result = [r['value'] for r in self.db.view('index/by_property_value', startkey=[prop], endkey=[prop, {}])]
+        else:
+            result = [r['value'] for r in self.db.view('index/by_property_value', key=[prop, value])]
+        return result      
 
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))

@@ -49,7 +49,17 @@ class ModelS(LocalModelBase):
                             "map": "function(doc) {var a = doc._id.split(' '); if (a.length == 2 && a[1].length > 0) {emit(a[1], {'rev': doc._rev, 'g': a[0]})}}"
                         },
                         "by_property_value": {
-                            "map": "function(doc) {\n  var a = doc._id.split(' '); \n  if (a.length == 2 && a[1].length > 0) {\n    for (property in doc) {\n      if (property[0] != '_') {\n        doc[property].forEach(function(value) {emit([property, value], null)});\n      }\n    }\n  }\n}\n"
+                            "map": """function(doc) {
+                                        var a = doc._id.split(' '); 
+                                        if (a.length == 2 && a[1].length > 0) {
+                                          for (property in doc) {
+                                            if (property[0] != '_') {
+                                              doc[property].forEach(function(value) {emit([property, value], [a[1], a[0]])});
+                                            }
+                                          }
+                                        }
+                                      }
+                                    """
                         }
                     }
                 }
