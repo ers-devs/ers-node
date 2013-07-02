@@ -46,7 +46,20 @@ class ModelS(LocalModelBase):
                     "_id": "_design/index",
                     "views": {
                         "by_entity": {
-                            "map": "function(doc) {var a = doc._id.split(' '); if (a.length == 2 && a[1].length>0) {emit(a[1], {'rev': doc._rev, 'g': a[0]})}}"
+                            "map": "function(doc) {var a = doc._id.split(' '); if (a.length == 2 && a[1].length > 0) {emit(a[1], {'rev': doc._rev, 'g': a[0]})}}"
+                        },
+                        "by_property_value": {
+                            "map": """function(doc) {
+                                        var a = doc._id.split(' '); 
+                                        if (a.length == 2 && a[1].length > 0) {
+                                          for (property in doc) {
+                                            if (property[0] != '_') {
+                                              doc[property].forEach(function(value) {emit([property, value], [a[1], a[0]])});
+                                            }
+                                          }
+                                        }
+                                      }
+                                    """
                         }
                     }
                 }
