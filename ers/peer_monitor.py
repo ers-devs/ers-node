@@ -86,7 +86,7 @@ if avahi_supported:
 
     def on_resolved(interface, protocol, name, service, domain, host, proto, address, port, txt, flags):
         if not is_my_host(host):
-            _on_peer_join(unicode(name), unicode(host), int(port), _extract_dbname(unicode(name)))
+            _on_peer_join(unicode(address), unicode(host), int(port), _extract_dbname(unicode(name)))
 
 
     def on_resolve_error(*args, **kwargs):
@@ -118,14 +118,51 @@ elif pybonjour_supported:
     def _pybonjour_monitor_main():
         import select
 
-        _resolved = []
+        _get_ip_result = []
+        _resolve_result = []
+
+        def do_query(query_sdRef, result_buffer):
+            result = None
+
+            while result_buffer:
+                result_buffer.pop()
+
+            try:
+                while not result_buffer:
+                    ready = select.select([query_sdRef], [], [], AVAHI_LOOKUP_TIMEOUT)
+                    if query_sdRef not in ready[0]:
+                        break
+                    pybonjour.DNSServiceProcessResult(query_sdRef)
+                else:
+                    result = result_buffer[0]
+                    result_buffer.pop()
+            finally:
+                query_sdRef.close()
+
+            return result
+
+        def on_get_ip(sd_ref, flags, if_index, error_code, service_name, rrtype, rrclass, rdata, ttl):
+            if error_code != pybonjour.kDNSServiceErr_NoError:
+                _report_error("Error while getting IP for service {0}".format(service_name))
+                _get_ip_result.append(None)
+                return
+
+            _get_ip_result.append(socket.inet_ntoa(rdata))
 
         def on_resolve(sd_ref, flags, if_index, error_code, full_name, host, port, txt_record):
             if error_code != pybonjour.kDNSServiceErr_NoError:
-                _report_error("Error resolving service {0}".format(full_name))
+                _report_error("Error while resolving service {0}".format(full_name))
+                _resolve_result.append(None)
                 return
 
-            _resolved.append((host, port))
+            query_sd = pybonjour.DNSServiceQueryRecord(interfaceIndex=if_index, fullname=host,
+                                                       rrtype=pybonjour.kDNSServiceType_A, callBack=on_get_ip)
+
+            address = do_query(query_sd, _get_ip_result)
+            if address is None:
+                _report_error("Error while resolving service {0}".format(full_name))
+
+            _resolve_result.append((host, address, port))
 
         def on_browse(sd_ref, flags, if_index, error_code, service_name, regtype, reply_domain):
             if error_code != pybonjour.kDNSServiceErr_NoError:
@@ -135,24 +172,16 @@ elif pybonjour_supported:
                 _on_peer_leave(service_name)
                 return
 
-            resolve_sd_ref = pybonjour.DNSServiceResolve(0, if_index, service_name, regtype, reply_domain, on_resolve)
+            query_sd = pybonjour.DNSServiceResolve(0, if_index, service_name, regtype, reply_domain, on_resolve)
+            result = do_query(query_sd, _resolve_result)
+            if result is None:
+                _report_error("Error resolving service {0}".format(service_name))
+                return
 
-            try:
-                while not _resolved:
-                    ready = select.select([resolve_sd_ref], [], [], AVAHI_LOOKUP_TIMEOUT)
-                    if resolve_sd_ref not in ready[0]:
-                        _report_error("Resolve timeout for {0}".format(service_name))
-                        break
-                    pybonjour.DNSServiceProcessResult(resolve_sd_ref)
+            host, address, port = result
+            if not is_my_host(host):
+                _on_peer_join(service_name, address, port, _extract_dbname(service_name))
 
-                if _resolved:
-                    host, port = _resolved[0]
-                    _resolved.pop()
-
-                    if not is_my_host(host):
-                        _on_peer_join(service_name, host, port, _extract_dbname(service_name))
-            finally:
-                resolve_sd_ref.close()
 
         browse_sd_ref = pybonjour.DNSServiceBrowse(regtype=ERS_AVAHI_SERVICE_TYPE, callBack=on_browse)
 
