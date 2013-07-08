@@ -91,7 +91,7 @@ class ModelS(LocalModelBase):
     def add_data(self, couch_doc, cache):
         cache_data = cache[self.cache_key(couch_doc['_id'])]
         for p, oo in cache_data.iteritems():
-            couch_doc[p] = list(oo.union(couch_doc.get(p, [])))
+            couch_doc[p] = couch_doc.get(p, []) + list(oo)
 
 class ModelT(LocalModelBase):
     """
