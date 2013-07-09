@@ -3,6 +3,7 @@
 import couchdbkit
 import rdflib
 import peer_monitor
+import sys
 
 from StringIO import StringIO
 from collections import defaultdict
@@ -188,8 +189,16 @@ class ERSLocal(ERSReadWrite):
 
     def get_annotation(self, entity):
         result = self.get_data(entity)
-        for remote in self.get_peer_ers_interfaces():
-            merge_annotations(result, remote.get_data(entity))
+        for peer in self.get_peers():
+            try:
+                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
+                remote_result = remote.get_data(entity)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                continue
+
+            merge_annotations(result, remote_result)
+
         return result
 
     def search(self, prop, value=None):
@@ -197,15 +206,23 @@ class ERSLocal(ERSReadWrite):
             Return a list of unique (entity, graph) pairs.
         """
         result = set(super(ERSLocal, self).search(prop, value))
-        for remote in self.get_peer_ers_interfaces():
-            result.update(remote.search(prop, value))
+        for peer in self.get_peers():
+            try:
+                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
+                remote_result = remote.search(prop, value)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                continue
+
+            result.update(remote_result)
+
         return list(result)
 
     def get_values(self, entity, prop):
         entity_data = self.get_annotation(entity)
         return entity_data.get(prop, [])
 
-    def get_peer_ers_interfaces(self):
+    def get_peers(self):
         result = []
 
         for peer_info in self.fixed_peers + peer_monitor.get_peers():
@@ -216,10 +233,9 @@ class ERSLocal(ERSReadWrite):
             else:
                 continue
 
-            dbname = peer_info['dbname'] if 'dbname' in peer_info else self.dbname
+            dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
 
-            peer_ers = ERSReadOnly(server_url, dbname)
-            result.append(peer_ers)
+            result.append({'server_url': server_url, 'dbname': dbname})
 
         return result
 
