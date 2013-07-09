@@ -1,5 +1,7 @@
 import re
+import time
 import sys
+import subprocess
 import threading
 import socket
 
@@ -8,8 +10,9 @@ AVAHI_LOOKUP_TIMEOUT = 5.0
 ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
 
 
-_peers = {}
-_lock = threading.Lock()
+_peers = None
+_lock = None
+_thread = None
 
 
 def get_peers():
@@ -21,8 +24,43 @@ def get_peers():
     return result
 
 
-def _report_error(error):
-    sys.stderr.write("Peer discovery error: {0}\n".format(error))
+def command_exists(command):
+    try:
+        subprocess.check_output(['which', command], stderr=subprocess.STDOUT)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def is_my_host(hostname):
+    return socket.gethostname().partition('.')[0] == hostname.partition('.')[0]
+
+
+def _main_thread():
+    if command_exists('avahi-browse'):
+        process_args = ['avahi-browse', '-p', '-k', '-r', ERS_AVAHI_SERVICE_TYPE]
+        handle_line = _handle_line_avahi
+    elif command_exists('dns-sd'):
+        process_args = ['dns-sd', '-B', ERS_AVAHI_SERVICE_TYPE]
+        handle_line = _handle_line_dns_sd
+    else:
+        _report_error('Neither avahi nor dns-sd are installed')
+        return
+
+    proc = subprocess.Popen(process_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            universal_newlines=True)
+
+    while proc.poll() is None:
+        line = proc.stdout.readline()
+        if line is None:
+            proc.wait()
+            break
+
+        handle_line(line.strip())
+
+    proc.wait()
+
+    _report_error("{0} failed with code {1}\n".format(process_args[0], proc.returncode))
 
 
 def _on_peer_join(peer_name, host, port, dbname):
@@ -43,168 +81,81 @@ def _extract_dbname(service_name):
         return match.group(1)
 
 
-def is_my_host(hostname):
-    return socket.gethostname().partition('.')[0] == hostname.partition('.')[0]
+def _handle_line_avahi(line):
+    parts = line.split(';')
+    if len(parts) < 6:
+        return
 
+    operation = parts[0]
+    service_name = re.sub(r'\\[0-9]{3}', lambda m: chr(int(m.group(0)[1:])), parts[3])
 
-
-
-try:
-    import pybonjour
-
-    pybonjour_supported = True
-except ImportError:
-    pybonjour_supported = False
-
-
-try:
-    import dbus
-    from dbus.mainloop.glib import DBusGMainLoop
-    import avahi
-    import gobject
-    import threading
-
-    avahi_supported = True
-except ImportError:
-    avahi_supported = False
-
-
-if avahi_supported:
-    gobject.threads_init()
-    dbus.mainloop.glib.threads_init()
-
-    _avahi_lock = threading.Lock()
-    _loop = DBusGMainLoop(set_as_default=True)
-    _bus = dbus.SystemBus(mainloop=_loop)
-    _server = dbus.Interface(_bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER),
-                             avahi.DBUS_INTERFACE_SERVER)
-    _serv_browser = _server.ServiceBrowserNew(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC,
-                                              ERS_AVAHI_SERVICE_TYPE, 'local', dbus.UInt32(0))
-    _browser = dbus.Interface(_bus.get_object(avahi.DBUS_NAME, _serv_browser),
-                              avahi.DBUS_INTERFACE_SERVICE_BROWSER)
-
-
-    def on_resolved(interface, protocol, name, service, domain, host, proto, address, port, txt, flags):
+    if operation == '=' and len(parts) >= 9:
+        host = parts[6]
+        port = int(parts[8])
+        dbname = _extract_dbname(service_name)
         if not is_my_host(host):
-            _on_peer_join(unicode(address), unicode(host), int(port), _extract_dbname(unicode(name)))
+            _on_peer_join(service_name, host, port, dbname)
+    elif operation == '-':
+        _on_peer_leave(service_name)
 
 
-    def on_resolve_error(*args, **kwargs):
-        _report_error("Error resolving service: {0}".format(args))
+def _handle_line_dns_sd(line):
+    parts = line.split(None, 6)
+    if len(parts) != 7:
+        return
+
+    operation = parts[1]
+    service_name = parts[6]
+
+    if operation == 'Add':
+        host, port, dbname = _lookup_dns_sd(service_name)
+        if host is not None and not is_my_host(host):
+            _on_peer_join(service_name, host, port, dbname)
+    elif operation == 'Rmv':
+        _on_peer_leave(service_name)
 
 
-    def on_item_new(interface, protocol, name, stype, domain, flags):
-        with _avahi_lock:
-            _server.ResolveService(interface, protocol, name, stype, domain, avahi.PROTO_UNSPEC, dbus.UInt32(0),
-                                   reply_handler=on_resolved, error_handler=on_resolve_error)
+def _lookup_dns_sd(service_name):
+    result = []
+    proc = subprocess.Popen(['dns-sd', '-L', service_name, ERS_AVAHI_SERVICE_TYPE], stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, universal_newlines=True)
+
+    def target():
+        while proc.poll() is None:
+            line = proc.stdout.readline()
+            if line is None:
+                proc.wait()
+                break
+
+            match = re.search(r' can be reached at ([^:]+):([0-9]+)', line, re.I)
+            if match is not None:
+                result.append((match.group(1).rstrip('.'), match.group(2)))
+                break
+
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join(AVAHI_LOOKUP_TIMEOUT)
+
+    if thread.is_alive():
+        proc.terminate()
+        thread.join()
+
+    if len(result) == 0:
+        return None, None, None
+    else:
+        dbname = _extract_dbname(service_name)
+
+        return result[0][0], result[0][1], dbname
 
 
-    def on_item_remove(interface, protocol, name, service, domain, flags):
-        _on_peer_leave(unicode(name))
-
-
-    def on_failure(exception):
-        _report_error(exception)
-
-
-    _browser.connect_to_signal("ItemNew", on_item_new)
-    _browser.connect_to_signal("ItemRemove", on_item_remove)
-    _browser.connect_to_signal("Failure", on_failure)
-
-    _thread = threading.Thread(target=gobject.MainLoop().run)
-    _thread.daemon = True
-    _thread.start()
-elif pybonjour_supported:
-    def _pybonjour_monitor_main():
-        import select
-
-        _get_ip_result = []
-        _resolve_result = []
-
-        def do_query(query_sdRef, result_buffer):
-            result = None
-
-            while result_buffer:
-                result_buffer.pop()
-
-            try:
-                while not result_buffer:
-                    ready = select.select([query_sdRef], [], [], AVAHI_LOOKUP_TIMEOUT)
-                    if query_sdRef not in ready[0]:
-                        break
-                    pybonjour.DNSServiceProcessResult(query_sdRef)
-                else:
-                    result = result_buffer[0]
-                    result_buffer.pop()
-            finally:
-                query_sdRef.close()
-
-            return result
-
-        def on_get_ip(sd_ref, flags, if_index, error_code, service_name, rrtype, rrclass, rdata, ttl):
-            if error_code != pybonjour.kDNSServiceErr_NoError:
-                _report_error("Error while getting IP for service {0}".format(service_name))
-                _get_ip_result.append(None)
-                return
-
-            _get_ip_result.append(socket.inet_ntoa(rdata))
-
-        def on_resolve(sd_ref, flags, if_index, error_code, full_name, host, port, txt_record):
-            if error_code != pybonjour.kDNSServiceErr_NoError:
-                _report_error("Error while resolving service {0}".format(full_name))
-                _resolve_result.append(None)
-                return
-
-            query_sd = pybonjour.DNSServiceQueryRecord(interfaceIndex=if_index, fullname=host,
-                                                       rrtype=pybonjour.kDNSServiceType_A, callBack=on_get_ip)
-
-            address = do_query(query_sd, _get_ip_result)
-            if address is None:
-                _report_error("Error while resolving service {0}".format(full_name))
-
-            _resolve_result.append((host, address, port))
-
-        def on_browse(sd_ref, flags, if_index, error_code, service_name, regtype, reply_domain):
-            if error_code != pybonjour.kDNSServiceErr_NoError:
-                return
-
-            if not (flags & pybonjour.kDNSServiceFlagsAdd):
-                _on_peer_leave(service_name)
-                return
-
-            query_sd = pybonjour.DNSServiceResolve(0, if_index, service_name, regtype, reply_domain, on_resolve)
-            result = do_query(query_sd, _resolve_result)
-            if result is None:
-                _report_error("Error resolving service {0}".format(service_name))
-                return
-
-            host, address, port = result
-            if not is_my_host(host):
-                _on_peer_join(service_name, address, port, _extract_dbname(service_name))
-
-
-        browse_sd_ref = pybonjour.DNSServiceBrowse(regtype=ERS_AVAHI_SERVICE_TYPE, callBack=on_browse)
-
-        try:
-            while True:
-                ready = select.select([browse_sd_ref], [], [])
-                if browse_sd_ref in ready[0]:
-                    pybonjour.DNSServiceProcessResult(browse_sd_ref)
-        finally:
-            browse_sd_ref.close()
-
-
-    _thread = threading.Thread(target=_pybonjour_monitor_main)
-    _thread.daemon = True
-    _thread.start()
-else:
-    _report_error("Neither avahi nor bonjour supported in Python, peer discovery will not work")
+def _report_error(error):
+    sys.stderr.write("Peer discovery error: {0}".format(error))
 
 
 def test():
-    import time
     print "This test runs continuously, use Ctrl+C to exit"
     prev_peers = None
+
     while True:
         time.sleep(0.5)
         peers = get_peers()
@@ -213,6 +164,14 @@ def test():
         if peers != prev_peers:
             print "Peers now:", peers
             prev_peers = peers
+
+
+_peers = {}
+_lock = threading.Lock()
+
+_thread = threading.Thread(target=_main_thread)
+_thread.daemon = True
+_thread.start()
 
 
 if __name__ == '__main__':
