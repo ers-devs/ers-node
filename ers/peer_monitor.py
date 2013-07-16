@@ -91,10 +91,11 @@ def _handle_line_avahi(line):
 
     if operation == '=' and len(parts) >= 9:
         host = parts[6]
+        ip = parts[7]
         port = int(parts[8])
         dbname = _extract_dbname(service_name)
         if not is_my_host(host):
-            _on_peer_join(service_name, host, port, dbname)
+            _on_peer_join(service_name, ip, port, dbname)
     elif operation == '-':
         _on_peer_leave(service_name)
 
