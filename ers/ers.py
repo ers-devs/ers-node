@@ -2,12 +2,16 @@
 
 import couchdbkit
 import rdflib
-import peer_monitor
+import re
+import zeroconf
 
 from StringIO import StringIO
 from collections import defaultdict
 from models import ModelS, ModelT
-                                                        
+
+
+ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
+
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 DEFAULT_MODEL = ModelS()
 
@@ -15,6 +19,13 @@ DEFAULT_MODEL = ModelS()
 def merge_annotations(a, b):
     for key in set(a.keys() + b.keys()):
         a.setdefault(key, []).extend(b.get(key, []))
+
+
+try:
+    _peer_monitor = zeroconf.ServiceMonitor(ERS_AVAHI_SERVICE_TYPE)
+except Exception as e:
+    _peer_monitor = None
+    print "Warning, unable to set up peer monitor:", e
 
 
 class EntityCache(defaultdict):
@@ -208,18 +219,26 @@ class ERSLocal(ERSReadWrite):
     def get_peer_ers_interfaces(self):
         result = []
 
-        for peer_info in self.fixed_peers + peer_monitor.get_peers():
+        for peer_info in self.fixed_peers:
             if 'url' in peer_info:
                 server_url = peer_info['url']
             elif 'host' in peer_info and 'port' in peer_info:
                 server_url = r'http://admin:admin@' + peer_info['host'] + ':' + str(peer_info['port']) + '/'
             else:
-                continue
+                raise RuntimeError("Must include either 'url' or 'host' and 'port' in fixed peer specification")
 
-            dbname = peer_info['dbname'] if 'dbname' in peer_info else self.dbname
+            dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
 
-            peer_ers = ERSReadOnly(server_url, dbname)
-            result.append(peer_ers)
+            result.append(ERSReadOnly(server_url, dbname))
+
+        if _peer_monitor is not None:
+            for peer in _peer_monitor.get_peers():
+                match = re.search(r'[(,]dbname=([^),]*)[),]', peer.service_name)
+
+                server_url = r'http://admin:admin@' + peer.ip + ':' + str(peer.port) + '/'
+                dbname = match.group(1) if match is not None else 'ers'
+
+                result.append(ERSReadOnly(server_url, dbname))
 
         return result
 
