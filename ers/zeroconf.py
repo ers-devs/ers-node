@@ -33,7 +33,11 @@ def _command_exists(command):
 
 def _watch_process_output(proc):
     while proc.poll() is None:
-        line = proc.stdout.readline()
+        try:
+            line = proc.stdout.readline()
+        except:
+            break
+
         if line is None:
             proc.wait()
             break
@@ -58,7 +62,8 @@ def _run_lookup_program(program_args, response_pattern, max_lookup_time=5.0):
             match = re.search(response_pattern, line)
             if match is not None:
                 result.append(match.groups())
-                proc.terminate()
+                try: proc.terminate()
+                except: pass
                 break
 
     result = []
@@ -69,7 +74,8 @@ def _run_lookup_program(program_args, response_pattern, max_lookup_time=5.0):
     thread.join(max_lookup_time)
 
     if thread.is_alive():
-        proc.terminate()
+        try: proc.terminate()
+        except: pass
         thread.join()
 
     return None if len(result) == 0 else result[0]
@@ -157,7 +163,8 @@ class PublishedService:
                 break
 
         if not success:
-            self._process.terminate()
+            try: self._process.terminate()
+            except: pass
             raise RuntimeError("Failure publishing service: {0}".format(error_text))
 
         self.name = name
@@ -176,7 +183,8 @@ class PublishedService:
                 return
             _published_services.remove(self)
 
-        self._process.terminate()
+        try: self._process.terminate()
+        except: pass
 
 
 class ServiceMonitor:
@@ -260,7 +268,8 @@ class ServiceMonitor:
             _monitors.remove(self)
 
         self._shutdown = True
-        self._process.terminate()
+        try: self._process.terminate()
+        except: pass
         self._thread.join()
 
     def get_peers(self):
