@@ -3,6 +3,7 @@
 import couchdbkit
 import rdflib
 import re
+import sys
 import threading
 import zeroconf
 
@@ -32,7 +33,7 @@ _peer_monitor_lock = threading.Lock()
 _peer_monitor_initialized = False
 
 
-def get_ers_peers():
+def get_peer_monitor():
     global _peer_monitor
     global _peer_monitor_initialized
 
@@ -42,11 +43,11 @@ def get_ers_peers():
                 _peer_monitor = zeroconf.ServiceMonitor(ERS_AVAHI_SERVICE_TYPE)
             except Exception as e:
                 _peer_monitor = None
-                print "Warning, unable to set up peer monitor:", e
+                sys.stderr.write("Warning, unable to set up peer monitor: {0}\n".format(e))
 
             _peer_monitor_initialized = True
 
-        return _peer_monitor.get_peers() if _peer_monitor is not None else list()
+        return _peer_monitor
 
 
 class EntityCache(defaultdict):
@@ -220,8 +221,16 @@ class ERSLocal(ERSReadWrite):
 
     def get_annotation(self, entity):
         result = self.get_data(entity)
-        for remote in self.get_peer_ers_interfaces():
-            merge_annotations(result, remote.get_data(entity))
+        for peer in self.get_peers():
+            try:
+                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
+                remote_result = remote.get_data(entity)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                continue
+
+            merge_annotations(result, remote_result)
+
         return result
 
     def search(self, prop, value=None):
@@ -229,15 +238,23 @@ class ERSLocal(ERSReadWrite):
             Return a list of unique (entity, graph) pairs.
         """
         result = set(super(ERSLocal, self).search(prop, value))
-        for remote in self.get_peer_ers_interfaces():
-            result.update(remote.search(prop, value))
+        for peer in self.get_peers():
+            try:
+                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
+                remote_result = remote.search(prop, value)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                continue
+
+            result.update(remote_result)
+
         return list(result)
 
     def get_values(self, entity, prop):
         entity_data = self.get_annotation(entity)
         return entity_data.get(prop, [])
 
-    def get_peer_ers_interfaces(self):
+    def get_peers(self):
         result = []
 
         for peer_info in self.fixed_peers:
@@ -250,19 +267,20 @@ class ERSLocal(ERSReadWrite):
 
             dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
 
-            result.append(ERSReadOnly(server_url, dbname))
+            result.append({'server_url': server_url, 'dbname': dbname})
 
-        for peer in get_ers_peers():
-            match = re.search(r'[(,]dbname=([^),]*)[),]', peer.service_name)
+        peer_mon = get_peer_monitor()
+        if peer_mon is not None:
+            for peer in peer_mon.get_peers():
+                match = re.search(r'[(,]dbname=([^),]*)[),]', peer.service_name)
 
-            server_url = r'http://admin:admin@' + peer.ip + ':' + str(peer.port) + '/'
-            dbname = match.group(1) if match is not None else 'ers'
+                server_url = r'http://admin:admin@' + peer.ip + ':' + str(peer.port) + '/'
+                dbname = match.group(1) if match is not None else 'ers'
 
-            result.append(ERSReadOnly(server_url, dbname))
+                result.append({'server_url': server_url, 'dbname': dbname})
 
         return result
 
 
 if __name__ == '__main__':
     print "To test this module use 'python ../../tests/test_ers.py'."
-
