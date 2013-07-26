@@ -2,10 +2,7 @@
 
 import couchdbkit
 import rdflib
-import re
 import sys
-import threading
-import zeroconf
 
 from StringIO import StringIO
 from collections import defaultdict
@@ -26,28 +23,6 @@ DEFAULT_MODEL = ModelS()
 def merge_annotations(a, b):
     for key in set(a.keys() + b.keys()):
         a.setdefault(key, []).extend(b.get(key, []))
-
-
-_peer_monitor = None
-_peer_monitor_lock = threading.Lock()
-_peer_monitor_initialized = False
-
-
-def get_peer_monitor():
-    global _peer_monitor
-    global _peer_monitor_initialized
-
-    with _peer_monitor_lock:
-        if not _peer_monitor_initialized:
-            try:
-                _peer_monitor = zeroconf.ServiceMonitor(ERS_AVAHI_SERVICE_TYPE)
-            except Exception as e:
-                _peer_monitor = None
-                sys.stderr.write("Warning, unable to set up peer monitor: {0}\n".format(e))
-
-            _peer_monitor_initialized = True
-
-        return _peer_monitor
 
 
 class EntityCache(defaultdict):
@@ -269,15 +244,17 @@ class ERSLocal(ERSReadWrite):
 
             result.append({'server_url': server_url, 'dbname': dbname})
 
-        peer_mon = get_peer_monitor()
-        if peer_mon is not None:
-            for peer in peer_mon.get_peers():
-                match = re.search(r'[(,]dbname=([^),]*)[),]', peer.service_name)
+        # TODO: get peers from CouchDB document maintained by daemon
 
-                server_url = r'http://admin:admin@' + peer.ip + ':' + str(peer.port) + '/'
-                dbname = match.group(1) if match is not None else 'ers'
-
-                result.append({'server_url': server_url, 'dbname': dbname})
+        #peer_mon = get_peer_monitor()
+        #if peer_mon is not None:
+        #    for peer in peer_mon.get_peers():
+        #        match = re.search(r'[(,]dbname=([^),]*)[),]', peer.service_name)
+        #
+        #        server_url = r'http://admin:admin@' + peer.ip + ':' + str(peer.port) + '/'
+        #        dbname = match.group(1) if match is not None else 'ers'
+        #
+        #        result.append({'server_url': server_url, 'dbname': dbname})
 
         return result
 
