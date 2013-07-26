@@ -8,12 +8,4 @@ couchdb  -b -a local.ini -p couchdata/couch.pid -o couchdata/couch.stdout -e cou
 DBNAME='ers'
 PORT=`cat local.ini | grep '^port *' | cut -d= -f2`
 
-SVC_NAME="ERS on `hostname -s` (dbname=$DBNAME)"
-
-if [ -n "`which avahi-publish`" ] ; then
-    avahi-publish -s "$SVC_NAME" _ers._tcp $PORT 2>/dev/null & echo $! > couchdata/avahi-publish.pid
-    echo Service published via Avahi
-elif [ -n "`which dns-sd`" ] ; then
-    dns-sd -R "$SVC_NAME" _ers._tcp local $PORT >/dev/null 2>/dev/null & echo $! > couchdata/avahi-publish.pid
-    echo Service published via Bonjour
-fi
+python -m ers.daemon -d $DBNAME -p $PORT &

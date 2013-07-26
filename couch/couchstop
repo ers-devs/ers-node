@@ -1,4 +1,7 @@
 #!/bin/bash
+
+kill `cat /var/run/ers_daemon.pid`
+
 DIR="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PIDFILE="$DIR/couchdata/couch.pid"
 if [ -f "$PIDFILE" ]
@@ -8,9 +11,4 @@ then
 else
   echo "CouchDB is not running or was started from an other directory."
 fi
-AP_PID="$DIR/couchdata/avahi-publish.pid"
-if [ -f "$AP_PID" ]
-then
-  kill -15 `cat "$AP_PID"`
-  rm "$AP_PID"
-fi
+
