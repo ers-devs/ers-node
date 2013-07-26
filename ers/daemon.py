@@ -8,7 +8,7 @@ import sys
 import zeroconf
 import gobject
 
-from ers import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_PEER_TYPE_CONTRIB, ERS_PEER_TYPE_BRIDGE
+from ers import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_PEER_TYPE_CONTRIB, ERS_PEER_TYPE_BRIDGE, DEFAULT_MODEL
 
 
 class ERSDaemon:
@@ -21,6 +21,7 @@ class ERSDaemon:
     _service = None
     _monitor = None
     _db = None
+    _model = None
 
     def __init__(self, peer_type=ERS_PEER_TYPE_CONTRIB, port=5984, dbname='ers', pidfile='/var/run/ers_daemon.pid'):
         self.peer_type = peer_type
@@ -49,9 +50,11 @@ class ERSDaemon:
         try:
             server_url = "http://admin:admin@127.0.0.1:{0}/".format(self.port)
             server = couchdbkit.Server(server_url)
-            if self.dbname not in server:
-                raise RuntimeError("Database '{0}' not found on server".format(self.dbname))
-            self._db = server.get_db(self.dbname)
+            self._db = server.get_or_create_db(self.dbname)
+            self._model = DEFAULT_MODEL
+            for doc in self._model.initial_docs():
+                if not self._db.doc_exist(doc['_id']):
+                    self._db.save_doc(doc)
         except Exception as e:
             raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
 
