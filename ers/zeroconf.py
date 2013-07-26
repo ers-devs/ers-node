@@ -46,6 +46,8 @@ class PublishedService:
         self.port = port
         self.text = text
 
+        self._group = None
+
     def publish(self):
         """
         Publishes the service defined by this handle.
@@ -64,7 +66,9 @@ class PublishedService:
         """
         Unpublishes the service.
         """
-        self._group.Reset()
+        if self._group is not None:
+            self._group.Reset()
+            self._group = None
 
 
 class ServiceMonitor:
@@ -92,6 +96,7 @@ class ServiceMonitor:
     see_self = None
 
     _active = None
+    _inited = None
     _server = None
     _peers = None
 
@@ -110,12 +115,17 @@ class ServiceMonitor:
         self.see_self = see_self
 
         self._active = False
+        self._inited = False
         self._peers = dict()
 
     def start(self):
         """
         Starts the monitor.
         """
+        if self._inited:
+            self._active = True
+            return
+
         loop = DBusGMainLoop(set_as_default=True)
         bus = dbus.SystemBus(mainloop=loop)
         server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
@@ -131,6 +141,7 @@ class ServiceMonitor:
 
         browser.connect_to_signal("ItemNew", self._on_item_new)
         browser.connect_to_signal("ItemRemove", self._on_item_remove)
+        self._inited = True
 
     def _on_item_new(self, interface, protocol, name, service_type, domain, flags):
         if (flags & avahi.LOOKUP_RESULT_LOCAL) and not self.see_self:
@@ -180,7 +191,7 @@ class ServiceMonitor:
         """
         Shuts down this monitor.
         """
-        pass
+        self._active = False
 
     def get_peers(self):
         """
