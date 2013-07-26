@@ -1,5 +1,6 @@
 import argparse
 import atexit
+import couchdbkit
 import os
 import signal
 import socket
@@ -19,6 +20,7 @@ class ERSDaemon:
     _active = False
     _service = None
     _monitor = None
+    _db = None
 
     def __init__(self, peer_type=ERS_PEER_TYPE_CONTRIB, port=5984, dbname='ers', pidfile='/var/run/ers_daemon.pid'):
         self.peer_type = peer_type
@@ -28,6 +30,7 @@ class ERSDaemon:
 
     def start(self):
         self._check_already_running()
+        self._init_db_connection()
 
         service_name = 'ERS on {0} (dbname={1},type={2})'.format(socket.gethostname(), self.dbname, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
@@ -41,6 +44,16 @@ class ERSDaemon:
         self._active = True
 
         atexit.register(self.stop)
+
+    def _init_db_connection(self):
+        try:
+            server_url = "http://admin:admin@127.0.0.1:{0}/".format(self.port)
+            server = couchdbkit.Server(server_url)
+            if self.dbname not in server:
+                raise RuntimeError("Database '{0}' not found on server".format(self.dbname))
+            self._db = server.get_db(self.dbname)
+        except Exception as e:
+            raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
 
     def stop(self):
         if not self._active:
