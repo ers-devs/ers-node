@@ -5,6 +5,12 @@ class LocalModelBase(object):
     def index_doc(self):
         return {"_id": "_design/index"}
 
+    def state_doc(self):
+        return {
+            "_id": "_design/state",
+            "peers": {}
+        }
+
     def cache_key(self, couch_key):
         return couch_key
 
@@ -19,6 +25,9 @@ class LocalModelBase(object):
 
     def delete_property(self, couch_doc, prop):
         pass
+
+    def initial_docs(self):
+        return [ self.index_doc(), self.state_doc() ]
 
 
 class ModelS(LocalModelBase):

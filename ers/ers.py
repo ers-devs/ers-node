@@ -127,8 +127,9 @@ class ERSReadWrite(ERSReadOnly):
             self.server.delete_db(dbname)
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
-        if not self.db.doc_exist('_design/index'):
-            self.db.save_doc(self.model.index_doc())
+        for doc in self.model.initial_docs():
+            if not self.db.doc_exist(doc['_id']):
+                self.db.save_doc(doc)
 
     def add_data(self, s, p, o, g):
         """Adds the value for the given property in the given entity. Create the entity if it does not exist yet)"""
