@@ -4,8 +4,8 @@ import os
 import signal
 import socket
 import sys
-import time
 import zeroconf
+import gobject
 
 from ers import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_PEER_TYPE_CONTRIB, ERS_PEER_TYPE_BRIDGE
 
@@ -32,6 +32,8 @@ class ERSDaemon:
         service_name = 'ERS on {0} (dbname={1},type={2})'.format(socket.gethostname(), self.dbname, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
         self._monitor = zeroconf.ServiceMonitor(ERS_AVAHI_SERVICE_TYPE, self._on_join, self._on_leave)
+        self._monitor.start()
+        self._service.publish()
 
         with file(self.pidfile, 'w+') as f:
             f.write("{0}\n".format(os.getpid()))
@@ -74,25 +76,30 @@ def run():
     parser.add_argument("--pidfile", help="PID file for ERS instance", type=str, default='/var/run/ers_daemon.pid')
     args = parser.parse_args()
 
+    print "Starting ERS daemon..."
+    daemon = None
     try:
         daemon = ERSDaemon(args.type, args.port, args.dbname, args.pidfile)
 
-        print "Starting ERS daemon..."
         daemon.start()
         print "Started ERS daemon"
 
         def sig_handler(sig, frame):
-            daemon.stop()
-            exit()
+            mainloop.quit()
         signal.signal(signal.SIGQUIT, sig_handler)
         signal.signal(signal.SIGTERM, sig_handler)
 
-        while True:
-            time.sleep(3600)
+        mainloop = gobject.MainLoop()
+        mainloop.run()
+
+        print "Stopping ERS daemon..."
     except (KeyboardInterrupt, SystemExit):
-        raise
+        pass
     except RuntimeError as e:
         sys.stderr.write('Error: '+str(e)+"\n")
+
+    if daemon is not None:
+        daemon.stop()
 
 
 if __name__ == '__main__':
