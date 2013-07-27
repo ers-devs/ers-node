@@ -52,7 +52,6 @@ class PublishedService:
         """
         Publishes the service defined by this handle.
         """
-        #bus = dbus.SystemBus()
         loop = DBusGMainLoop(set_as_default=True)
         bus = dbus.SystemBus(mainloop=loop)
         server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
