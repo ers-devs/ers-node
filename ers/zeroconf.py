@@ -5,12 +5,15 @@ is supported.
 
 __author__ = 'Cristian Dinu <goc9000@gmail.com>'
 
+try:
+    import avahi
+    import dbus
 
-import avahi
-import dbus
-import gobject
+    from dbus.mainloop.glib import DBusGMainLoop
 
-from dbus.mainloop.glib import DBusGMainLoop
+    AVAHI_SUPPORTED = True
+except ImportError as e:
+    AVAHI_SUPPORTED = False
 
 
 def _listify(value):
@@ -20,6 +23,11 @@ def _listify(value):
         return [value]
     else:
         return list(value)
+
+
+def _check_avahi_supported():
+    if not AVAHI_SUPPORTED:
+        raise RuntimeError("Python Avahi support not installed! (packages 'avahi' and 'dbus')")
 
 
 class PublishedService:
@@ -52,6 +60,8 @@ class PublishedService:
         """
         Publishes the service defined by this handle.
         """
+        _check_avahi_supported()
+
         loop = DBusGMainLoop(set_as_default=True)
         bus = dbus.SystemBus(mainloop=loop)
         server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
@@ -121,6 +131,8 @@ class ServiceMonitor:
         """
         Starts the monitor.
         """
+        _check_avahi_supported()
+
         if self._inited:
             self._active = True
             return
@@ -227,6 +239,8 @@ def test():
 
     Note: This test requires user interaction.
     """
+    import gobject
+
     mainloop = gobject.MainLoop()
 
     def run_mainloop_for(seconds):
