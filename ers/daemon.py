@@ -25,6 +25,7 @@ class ERSDaemon:
     _monitor = None
     _db = None
     _model = None
+    _repl_db = None
     _peers = None
 
     def __init__(self, peer_type=ERS_DEFAULT_PEER_TYPE, port=5984, dbname=ERS_DEFAULT_DBNAME,
@@ -42,6 +43,7 @@ class ERSDaemon:
         self._init_db_connection()
 
         self._update_peers_in_couchdb()
+        self._clear_replication()
 
         service_name = 'ERS on {0} (dbname={1},type={2})'.format(socket.gethostname(), self.dbname, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
@@ -66,6 +68,7 @@ class ERSDaemon:
                 try:
                     server = couchdbkit.Server(server_url)
                     self._db = server.get_or_create_db(self.dbname)
+                    self._repl_db = server.get_db('_replicator')
                     break
                 except Exception as e:
                     if 'Connection refused' in str(e) and tries_left > 0:
@@ -103,8 +106,8 @@ class ERSDaemon:
 
         self._peers[ers_peer.service_name] = ers_peer
 
-        # TODO: setup replication etc.
         self._update_peers_in_couchdb()
+        self._setup_replication(ers_peer)
 
     def _on_leave(self, peer):
         if not peer.service_name in self._peers:
@@ -113,13 +116,34 @@ class ERSDaemon:
         ex_peer = self._peers[peer.service_name]
         del self._peers[peer.service_name]
 
-        # TODO: tear down replication etc.
         self._update_peers_in_couchdb()
+        self._teardown_replication(ex_peer)
 
     def _update_peers_in_couchdb(self):
         state_doc = self._db.open_doc('_design/state')
         state_doc['peers'] = [peer.to_json() for peer in self._peers.values()]
         self._db.save_doc(state_doc)
+
+    def _replication_id(self, peer):
+        return 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
+
+    def _setup_replication(self, peer):
+        doc = {
+            '_id': self._replication_id(peer),
+            'source': self.dbname,
+            'target': r'http://admin:admin@{0}:{1}/{2}'.format(peer.ip, peer.port, peer.dbname),
+            'continuous': True
+        }
+
+        self._repl_db.save_doc(doc)
+
+    def _teardown_replication(self, peer):
+        self._repl_db.delete_doc(self._replication_id(peer))
+
+    def _clear_replication(self):
+        search_view = { "map": 'function(doc) { if (doc._id.indexOf("ers-auto-") == 0) emit(doc._id, doc); }' }
+
+        self._repl_db.delete_docs([doc['value'] for doc in self._repl_db.temp_view(search_view)])
 
     def _check_already_running(self):
         if os.path.exists(self.pidfile):
