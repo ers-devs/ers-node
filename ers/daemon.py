@@ -5,6 +5,7 @@ import os
 import signal
 import socket
 import sys
+import time
 import zeroconf
 import gobject
 
@@ -17,6 +18,7 @@ class ERSDaemon:
     port = None
     dbname = None
     pidfile = None
+    tries = None
 
     _active = False
     _service = None
@@ -26,11 +28,12 @@ class ERSDaemon:
     _peers = None
 
     def __init__(self, peer_type=ERS_DEFAULT_PEER_TYPE, port=5984, dbname=ERS_DEFAULT_DBNAME,
-                 pidfile='/var/run/ers_daemon.pid'):
+                 pidfile='/var/run/ers_daemon.pid', tries=10):
         self.peer_type = peer_type
         self.port = port
         self.dbname = dbname
         self.pidfile = pidfile
+        self.tries = max(tries, 1)
 
         self._peers = {}
 
@@ -57,8 +60,21 @@ class ERSDaemon:
     def _init_db_connection(self):
         try:
             server_url = "http://admin:admin@127.0.0.1:{0}/".format(self.port)
-            server = couchdbkit.Server(server_url)
-            self._db = server.get_or_create_db(self.dbname)
+
+            tries_left = self.tries
+            while True:
+                try:
+                    server = couchdbkit.Server(server_url)
+                    self._db = server.get_or_create_db(self.dbname)
+                    break
+                except Exception as e:
+                    if 'Connection refused' in str(e) and tries_left > 0:
+                        tries_left -= 1
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise e
+
             self._model = DEFAULT_MODEL
             for doc in self._model.initial_docs():
                 if not self._db.doc_exist(doc['_id']):
@@ -118,12 +134,13 @@ def run():
     parser.add_argument("-t", "--type", help="Type of instance", type=str, default=ERS_DEFAULT_PEER_TYPE,
                         choices=ERS_PEER_TYPES)
     parser.add_argument("--pidfile", help="PID file for ERS instance", type=str, default='/var/run/ers_daemon.pid')
+    parser.add_argument("--tries", help="Number of tries to connect to CouchDB", type=int, default=10)
     args = parser.parse_args()
 
     print "Starting ERS daemon..."
     daemon = None
     try:
-        daemon = ERSDaemon(args.type, args.port, args.dbname, args.pidfile)
+        daemon = ERSDaemon(args.type, args.port, args.dbname, args.pidfile, args.tries)
 
         daemon.start()
         print "Started ERS daemon"

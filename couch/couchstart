@@ -5,8 +5,6 @@ cd "$DIR"
 mkdir couchdata 2> /dev/null
 couchdb  -b -a local.ini -p couchdata/couch.pid -o couchdata/couch.stdout -e couchdata/couch.stderr
 
-sleep 3
-
 DBNAME='ers'
 PORT=`cat local.ini | grep '^port *' | cut -d= -f2`
 
