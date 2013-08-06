@@ -43,8 +43,7 @@ class ERSPeerInfo(ServicePeer):
         self.peer_type = peer_type
 
     def __str__(self):
-        return "ERS peer '{0}' on {1}(={2}):{3} (dbname={4}, type={5})".format(
-            self.service_name, self.host, self.ip, self.port, self.dbname, self.peer_type)
+        return "ERS peer on {0.host}(={0.ip}):{0.port} (dbname={0.dbname}, type={0.peer_type})".format(self)
 
     def to_json(self):
         return {
