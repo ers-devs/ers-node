@@ -7,7 +7,7 @@ class LocalModelBase(object):
 
     def state_doc(self):
         return {
-            "_id": "_design/state",
+            "_id": "_local/state",
             "peers": {}
         }
 
