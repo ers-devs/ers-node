@@ -24,7 +24,8 @@ LIMIT_MAXSEQ_PER_OP = 1000
 SYNC_PERIOD_SEC=5
 # HTTP address of the global server 
 GLOBAL_SERVER_HOST = "127.0.0.1"
-GLOBAL_SERVER_PORT = 8080
+#GLOBAL_SERVER_HOST = "cassandra3-ersdevs.rhcloud.com"
+GLOBAL_SERVER_PORT = 8888
 # The RESTful endpoint for handling the last synchronized sequence
 GLOBAL_SERVER_HTTP_SEQ = "/ers/last_sync_seq"
 # RESTful endpoint for uploading a file containing document changes
@@ -183,7 +184,7 @@ class SynchronizationManager(object):
     
 
 def test():
-    synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
+    synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
     graph_to_synch = 'test'
     synch_manager.start_synch(graph_to_synch)  
     time.sleep(100)
