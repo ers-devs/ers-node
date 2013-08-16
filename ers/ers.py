@@ -26,10 +26,9 @@ DEFAULT_MODEL = ModelS()
 
 
 def merge_annotations(a, b):
-    for key, values in b.iteritems():
-        unique_values = set(values)
-        unique_values.update(a.get(key,[]))
-        a[key] = list(unique_values)
+    for key in set(a.keys() + b.keys()):
+        a.setdefault(key, []).extend(b.get(key, []))
+
 
 class ERSPeerInfo(ServicePeer):
     """
