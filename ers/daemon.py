@@ -35,7 +35,7 @@ class ERSDaemon:
         self.peer_type = peer_type
         self.port = port
         self.dbname = dbname
-        self.pidfile = pidfile
+        self.pidfile = pidfile if pidfile is not None and pidfile.lower() != 'none' else None
         self.tries = max(tries, 1)
         self.logger = logger if logger is not None else logging.getLogger('ers-daemon')
 
@@ -57,8 +57,7 @@ class ERSDaemon:
         self._monitor = zeroconf.ServiceMonitor(ERS_AVAHI_SERVICE_TYPE, self._on_join, self._on_leave)
         self._monitor.start()
 
-        with file(self.pidfile, 'w+') as f:
-            f.write("{0}\n".format(os.getpid()))
+        self._init_pidfile()
 
         self._active = True
 
@@ -92,6 +91,18 @@ class ERSDaemon:
         except Exception as e:
             raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
 
+    def _init_pidfile(self):
+        if self.pidfile is not None:
+            with file(self.pidfile, 'w+') as f:
+                f.write("{0}\n".format(os.getpid()))
+
+    def _remove_pidfile(self):
+        if self.pidfile is not None:
+            try:
+                os.remove(self.pidfile)
+            except IOError:
+                pass
+
     def stop(self):
         if not self._active:
             return
@@ -104,7 +115,7 @@ class ERSDaemon:
         if self._service is not None:
             self._service.unpublish()
 
-        os.remove(self.pidfile)
+        self._remove_pidfile()
 
         self._active = False
 
@@ -187,7 +198,8 @@ def run():
     parser.add_argument("-d", "--dbname", help="CouchDB database name", type=str, default=ERS_DEFAULT_DBNAME)
     parser.add_argument("-t", "--type", help="Type of instance", type=str, default=ERS_DEFAULT_PEER_TYPE,
                         choices=ERS_PEER_TYPES)
-    parser.add_argument("--pidfile", help="PID file for this ERS daemon instance", type=str, default='/var/run/ers_daemon.pid')
+    parser.add_argument("--pidfile", help="PID file for this ERS daemon instance (or 'none')",
+                        type=str, default='/var/run/ers_daemon.pid')
     parser.add_argument("--tries", help="Number of tries to connect to CouchDB", type=int, default=10)
     parser.add_argument("--logfile", help="The log file to use", type=str, default='/var/log/ers_daemon.log')
     parser.add_argument("--loglevel", help="Log messages of this level and above", type=str, default='info',
