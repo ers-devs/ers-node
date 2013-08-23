@@ -174,7 +174,7 @@ class ERSDaemon:
         self._repl_db.delete_docs([doc['value'] for doc in self._repl_db.temp_view(search_view)])
 
     def _check_already_running(self):
-        if os.path.exists(self.pidfile):
+        if self.pidfile is not None and os.path.exists(self.pidfile):
             raise RuntimeError("The ERS daemon seems to be already running. If this is not the case, " +
                                "delete " + self.pidfile + " and try again.")
 
