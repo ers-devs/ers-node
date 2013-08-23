@@ -148,7 +148,7 @@ class ERSDaemon:
         self._teardown_replication(ex_peer)
 
     def _update_peers_in_couchdb(self):
-        state_doc = self._db.open_doc('_design/state')
+        state_doc = self._db.open_doc('_local/state')
         state_doc['peers'] = [peer.to_json() for peer in self._peers.values()]
         self._db.save_doc(state_doc)
 
