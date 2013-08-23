@@ -9,6 +9,7 @@ import time
 import zeroconf
 import gobject
 import logging
+import logging.handlers
 
 from ers import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_DEFAULT_DBNAME, ERS_DEFAULT_PEER_TYPE, DEFAULT_MODEL
 from ers import ERSPeerInfo
@@ -184,10 +185,17 @@ def setup_logging(args):
     logger = logging.getLogger('ers-daemon')
     logger.setLevel(10 + 10 * LOG_LEVELS.index(args.loglevel))
 
-    handler = logging.FileHandler(args.logfile)
-    handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
+    if args.logtype == 'file':
+        handler = logging.FileHandler(args.logfile)
+        handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
+    elif args.logtype == 'syslog':
+        handler = logging.handlers.SysLogHandler(address='/dev/log')
+        handler.setFormatter(logging.Formatter("%(message)s"))
+    else:
+        handler = None
 
-    logger.addHandler(handler)
+    if handler is not None:
+        logger.addHandler(handler)
 
     return logger
 
@@ -201,6 +209,8 @@ def run():
     parser.add_argument("--pidfile", help="PID file for this ERS daemon instance (or 'none')",
                         type=str, default='/var/run/ers_daemon.pid')
     parser.add_argument("--tries", help="Number of tries to connect to CouchDB", type=int, default=10)
+    parser.add_argument("--logtype", help="The log type (own file vs. syslog)", type=str, default='file',
+                        choices=['file', 'syslog'])
     parser.add_argument("--logfile", help="The log file to use", type=str, default='/var/log/ers_daemon.log')
     parser.add_argument("--loglevel", help="Log messages of this level and above", type=str, default='info',
                         choices=LOG_LEVELS)
