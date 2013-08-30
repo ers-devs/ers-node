@@ -117,6 +117,10 @@ class ERSDaemon:
         if self._service is not None:
             self._service.unpublish()
 
+        self._peers = {}
+        self._update_peers_in_couchdb()
+        self._clear_replication()
+
         self._remove_pidfile()
 
         self._active = False
