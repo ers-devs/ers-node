@@ -132,7 +132,7 @@ class ERSDaemon:
         self._peers[ers_peer.service_name] = ers_peer
 
         self._update_peers_in_couchdb()
-        self._setup_replication(ers_peer)
+        self._update_replication_links()
 
     def _on_leave(self, peer):
         if not peer.service_name in self._peers:
@@ -145,33 +145,53 @@ class ERSDaemon:
         del self._peers[peer.service_name]
 
         self._update_peers_in_couchdb()
-        self._teardown_replication(ex_peer)
+        self._update_replication_links()
 
     def _update_peers_in_couchdb(self):
         state_doc = self._db.open_doc('_local/state')
         state_doc['peers'] = [peer.to_json() for peer in self._peers.values()]
         self._db.save_doc(state_doc)
 
-    def _replication_id(self, peer):
+    def _replication_doc_id(self, peer):
         return 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
 
-    def _setup_replication(self, peer):
-        doc = {
-            '_id': self._replication_id(peer),
+    def _update_replication_links(self):
+        desired_repl_docs = [{
+            '_id': self._replication_doc_id(peer),
             'source': self.dbname,
             'target': r'http://admin:admin@{0}:{1}/{2}'.format(peer.ip, peer.port, peer.dbname),
             'continuous': True
-        }
+        } for peer in self._peers.values()]
 
-        self._repl_db.save_doc(doc)
-
-    def _teardown_replication(self, peer):
-        self._repl_db.delete_doc(self._replication_id(peer))
+        self._apply_desired_repl_docs(desired_repl_docs)
 
     def _clear_replication(self):
+        self._apply_desired_repl_docs([])
+
+    def _apply_desired_repl_docs(self, desired_repl_docs):
+        for desired_doc in desired_repl_docs:
+            # Add new document
+            if not self._repl_db.doc_exist(desired_doc['_id']):
+                self._repl_db.save_doc(desired_doc)
+                continue
+
+            # Update existing document, if changed
+            doc = self._repl_db.open_doc(desired_doc['_id'])
+            if any(doc[key] != desired_doc[key] for key in desired_doc):
+                for key in desired_doc:
+                    doc[key] = desired_doc[key]
+                self._repl_db.save_doc(doc)
+
+        # Docs that are no longer in the desired list are deleted
+        kept_doc_ids = set(doc['_id'] for doc in desired_repl_docs)
+        for doc in self._replication_docs():
+            if doc['_id'] not in kept_doc_ids:
+                self._repl_db.delete_doc(doc)
+
+    def _replication_docs(self):
         search_view = { "map": 'function(doc) { if (doc._id.indexOf("ers-auto-") == 0) emit(doc._id, doc); }' }
 
-        self._repl_db.delete_docs([doc['value'] for doc in self._repl_db.temp_view(search_view)])
+        return [doc['value'] for doc in self._repl_db.temp_view(search_view)]
 
     def _check_already_running(self):
         if self.pidfile is not None and os.path.exists(self.pidfile):
