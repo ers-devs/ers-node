@@ -242,6 +242,7 @@ def run():
 
     daemon = None
     failed = False
+    mainloop = None
     try:
         daemon = ERSDaemon(args.type, args.port, args.dbname, args.pidfile, args.tries, logger)
         daemon.start()
@@ -254,7 +255,8 @@ def run():
         mainloop = gobject.MainLoop()
         mainloop.run()
     except (KeyboardInterrupt, SystemExit):
-        pass
+        if mainloop is not None:
+            mainloop.quit()
     except RuntimeError as e:
         logger.critical(str(e))
         failed = True
