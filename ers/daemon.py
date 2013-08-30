@@ -12,6 +12,7 @@ import logging
 import logging.handlers
 
 from ers import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_DEFAULT_DBNAME, ERS_DEFAULT_PEER_TYPE, DEFAULT_MODEL
+from ers import ERS_PEER_TYPE_BRIDGE
 from ers import ERSPeerInfo
 
 
@@ -170,23 +171,24 @@ class ERSDaemon:
 
     def _apply_desired_repl_docs(self, desired_repl_docs):
         for desired_doc in desired_repl_docs:
-            # Add new document
             if not self._repl_db.doc_exist(desired_doc['_id']):
                 self._repl_db.save_doc(desired_doc)
+                self.logger.debug("Added replication doc: {0}".format(str(desired_doc)))
                 continue
 
-            # Update existing document, if changed
             doc = self._repl_db.open_doc(desired_doc['_id'])
             if any(doc[key] != desired_doc[key] for key in desired_doc):
                 for key in desired_doc:
                     doc[key] = desired_doc[key]
                 self._repl_db.save_doc(doc)
+                self.logger.debug("Updated replication doc: {0}".format(str(desired_doc)))
 
         # Docs that are no longer in the desired list are deleted
         kept_doc_ids = set(doc['_id'] for doc in desired_repl_docs)
         for doc in self._replication_docs():
             if doc['_id'] not in kept_doc_ids:
                 self._repl_db.delete_doc(doc)
+                self.logger.debug("Deleted replication doc: {0}".format(str(doc)))
 
     def _replication_docs(self):
         search_view = { "map": 'function(doc) { if (doc._id.indexOf("ers-auto-") == 0) emit(doc._id, doc); }' }
