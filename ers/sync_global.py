@@ -12,10 +12,13 @@ from threading import Thread
 from time import sleep 
 from collections import defaultdict
 from models import ModelS, ModelT
-from ers import ERSReadWrite
 from couchdbkit.changes import ChangesStream
 from string import Template
-                                                        
+
+import functools
+from ers import ERSLocal
+ERSReadWrite = functools.partial(ERSLocal, local_only=True)                                                        
+
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 DEFAULT_MODEL = ModelS()
 # Maximum this number of changes are retrieved once. It can be an issue if the DB has never been synchronized
