@@ -5,11 +5,9 @@ import rdflib
 import re
 import sys
 
-from StringIO import StringIO
-from collections import defaultdict
 from models import ModelS, ModelT
 from zeroconf import ServicePeer
-
+from utils import EntityCache
 
 ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
 
@@ -19,7 +17,6 @@ ERS_PEER_TYPES = [ERS_PEER_TYPE_CONTRIB, ERS_PEER_TYPE_BRIDGE]
 
 ERS_DEFAULT_DBNAME = 'ers'
 ERS_DEFAULT_PEER_TYPE = ERS_PEER_TYPE_CONTRIB
-
 
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 DEFAULT_MODEL = ModelS()
@@ -74,56 +71,6 @@ class ERSPeerInfo(ServicePeer):
                 peer_type = value
 
         return ERSPeerInfo(svc_peer.service_name, svc_peer.host, svc_peer.ip, svc_peer.port, dbname, peer_type)
-
-
-class EntityCache(defaultdict):
-    """Equivalent to defaultdict(lambda: defaultdict(set))."""
-    def __init__(self):
-        super(EntityCache, self).__init__(lambda: defaultdict(set))
-
-    def add(self, s, p, o):
-        """Add <s, p, o> to cache."""
-        self[s][p].add(o)
-
-    def parse_nt(self, **kwargs):
-        if 'filename' in kwargs:
-            lines = open(kwargs['filename'], 'r')
-        elif 'data' in kwargs:
-            lines = StringIO(kwargs['data'])
-        else:
-            raise RuntimeError("Must specify filename= or data= for parse_nt")
-
-        for input_line in lines:
-            triple = input_line.split(None, 2) # assumes SPO is separated by any whitespace string with leading and trailing spaces ignored
-            s = triple[0][1:-1] # get rid of the <>, naively assumes no bNodes for now
-            p = triple[1][1:-1] # get rid of the <>
-            o = triple[2][1:-1] # get rid of the <> or "", naively assumes no bNodes for now
-            oquote = triple[2][0]
-            if oquote == '"':
-                o = triple[2][1:].rsplit('"')[0]
-            elif oquote == '<':
-                o = triple[2][1:].rsplit('>')[0]
-            else:
-                o = triple[2].split(' ')[0] # might be a named node
-
-            self.add(s, p, o)
-
-        return self
-
-    def parse_nt_rdflib(self, **kwargs):
-        graph = rdflib.Graph()
-
-        if 'filename' in kwargs:
-            graph.parse(location=kwargs['filename'], format='nt')
-        elif 'data' in kwargs:
-            graph.parse(data=kwargs['data'], format='nt')
-        else:
-            raise RuntimeError("Must specify filename= or data= for parse_nt_rdflib")
-
-        for s, p, o in graph:
-            self.add(str(s), str(p), str(o))
-
-        return self
 
 
 class ERSReadOnly(object):
@@ -210,19 +157,6 @@ class ERSReadWrite(ERSReadOnly):
         for doc in docs:
             self.model.delete_property(doc, prop)
         return self.db.save_docs(docs)        
-
-    def import_nt(self, file_name, target_graph):
-        """Import N-Triples file."""
-        cache = EntityCache().parse_nt(filename=file_name)
-
-        self.write_cache(cache, target_graph)
-
-    def import_nt_rdflib(self, file_name, target_graph):
-        """Import N-Triples file using rdflib."""
-        # TODO: get rid of the intermediate cache?
-        cache = EntityCache().parse_nt_rdflib(filename=file_name)
-
-        self.write_cache(cache, target_graph)
 
     def write_cache(self, cache, graph):
         docs = []
