@@ -73,10 +73,17 @@ class ERSPeerInfo(ServicePeer):
 
 
 class ERSReadOnly(object):
-    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers', model=DEFAULT_MODEL):
+    def __init__(self,
+                 server_url=r'http://admin:admin@127.0.0.1:5984/',
+                 dbname='ers',
+                 model=DEFAULT_MODEL,
+                 fixed_peers=(),
+                 local_only=False):
+        self.local_only = local_only
         self.server = couchdbkit.Server(server_url)
-        self.db = self.server.get_db(dbname)
         self.model = model
+        self.fixed_peers = list(fixed_peers)
+        self.db = self.server.get_db(dbname)
 
     def get_data(self, subject, graph=None):
         """get all property+values for an identifier"""
@@ -115,16 +122,44 @@ class ERSReadOnly(object):
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
 
+    def get_peers(self):
+        result = []
+        if self.local_only:
+            return result
+        for peer_info in self.fixed_peers:
+            if 'url' in peer_info:
+                server_url = peer_info['url']
+            elif 'host' in peer_info and 'port' in peer_info:
+                server_url = r'http://admin:admin@' + peer_info['host'] + ':' + str(peer_info['port']) + '/'
+            else:
+                raise RuntimeError("Must include either 'url' or 'host' and 'port' in fixed peer specification")
+
+            dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
+
+            result.append({'server_url': server_url, 'dbname': dbname})
+        state_doc = self.db.open_doc('_local/state')
+        for peer in state_doc['peers']:
+            result.append({
+                'server_url': r'http://admin:admin@' + peer['ip'] + ':' + str(peer['port']) + '/',
+                'dbname': peer['dbname']
+            })
+        return result
+
 
 class ERSLocal(ERSReadOnly):
-    def __init__(self, server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers',
-                 model=DEFAULT_MODEL, fixed_peers=(), local_only=False, reset_database=False):
+    def __init__(self,
+                 server_url=r'http://admin:admin@127.0.0.1:5984/',
+                 dbname='ers',
+                 model=DEFAULT_MODEL,
+                 fixed_peers=(),
+                 local_only=False,
+                 reset_database=False):
+        self.local_only = local_only
         self.server = couchdbkit.Server(server_url)
         if reset_database and dbname in self.server:
             self.server.delete_db(dbname)
         self.db = self.server.get_or_create_db(dbname)
         self.model = model
-        self.local_only = local_only
         for doc in self.model.initial_docs():
             if not self.db.doc_exist(doc['_id']):
                 self.db.save_doc(doc)
@@ -208,32 +243,6 @@ class ERSLocal(ERSReadOnly):
     def get_values(self, entity, prop):
         entity_data = self.get_annotation(entity)
         return entity_data.get(prop, [])
-
-    def get_peers(self):
-        result = []
-        if self.local_only:
-            return result
-
-        for peer_info in self.fixed_peers:
-            if 'url' in peer_info:
-                server_url = peer_info['url']
-            elif 'host' in peer_info and 'port' in peer_info:
-                server_url = r'http://admin:admin@' + peer_info['host'] + ':' + str(peer_info['port']) + '/'
-            else:
-                raise RuntimeError("Must include either 'url' or 'host' and 'port' in fixed peer specification")
-
-            dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
-
-            result.append({'server_url': server_url, 'dbname': dbname})
-
-        state_doc = self.db.open_doc('_local/state')
-        for peer in state_doc['peers']:
-            result.append({
-                'server_url': r'http://admin:admin@' + peer['ip'] + ':' + str(peer['port']) + '/',
-                'dbname': peer['dbname']
-            })
-
-        return result
 
 
 if __name__ == '__main__':
