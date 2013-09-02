@@ -1,6 +1,7 @@
 
 from collections import defaultdict
 from StringIO import StringIO
+import rdflib
 
 
 def import_nt(registry, file_name, target_graph):

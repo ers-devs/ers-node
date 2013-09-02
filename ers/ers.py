@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 import couchdbkit
-import rdflib
 import re
 import sys
 
