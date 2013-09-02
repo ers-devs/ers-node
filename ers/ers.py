@@ -226,7 +226,7 @@ class ERSLocal(ERSReadOnly):
 
             result.append({'server_url': server_url, 'dbname': dbname})
 
-        state_doc = self.db.open_doc('_design/state')
+        state_doc = self.db.open_doc('_local/state')
         for peer in state_doc['peers']:
             result.append({
                 'server_url': r'http://admin:admin@' + peer['ip'] + ':' + str(peer['port']) + '/',

@@ -9,6 +9,7 @@ import time
 import zeroconf
 import gobject
 import logging
+import logging.handlers
 
 from ers import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_DEFAULT_DBNAME, ERS_DEFAULT_PEER_TYPE, DEFAULT_MODEL
 from ers import ERSPeerInfo
@@ -35,7 +36,7 @@ class ERSDaemon:
         self.peer_type = peer_type
         self.port = port
         self.dbname = dbname
-        self.pidfile = pidfile
+        self.pidfile = pidfile if pidfile is not None and pidfile.lower() != 'none' else None
         self.tries = max(tries, 1)
         self.logger = logger if logger is not None else logging.getLogger('ers-daemon')
 
@@ -57,8 +58,7 @@ class ERSDaemon:
         self._monitor = zeroconf.ServiceMonitor(ERS_AVAHI_SERVICE_TYPE, self._on_join, self._on_leave)
         self._monitor.start()
 
-        with file(self.pidfile, 'w+') as f:
-            f.write("{0}\n".format(os.getpid()))
+        self._init_pidfile()
 
         self._active = True
 
@@ -92,6 +92,18 @@ class ERSDaemon:
         except Exception as e:
             raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
 
+    def _init_pidfile(self):
+        if self.pidfile is not None:
+            with file(self.pidfile, 'w+') as f:
+                f.write("{0}\n".format(os.getpid()))
+
+    def _remove_pidfile(self):
+        if self.pidfile is not None:
+            try:
+                os.remove(self.pidfile)
+            except IOError:
+                pass
+
     def stop(self):
         if not self._active:
             return
@@ -104,7 +116,7 @@ class ERSDaemon:
         if self._service is not None:
             self._service.unpublish()
 
-        os.remove(self.pidfile)
+        self._remove_pidfile()
 
         self._active = False
 
@@ -136,7 +148,7 @@ class ERSDaemon:
         self._teardown_replication(ex_peer)
 
     def _update_peers_in_couchdb(self):
-        state_doc = self._db.open_doc('_design/state')
+        state_doc = self._db.open_doc('_local/state')
         state_doc['peers'] = [peer.to_json() for peer in self._peers.values()]
         self._db.save_doc(state_doc)
 
@@ -162,7 +174,7 @@ class ERSDaemon:
         self._repl_db.delete_docs([doc['value'] for doc in self._repl_db.temp_view(search_view)])
 
     def _check_already_running(self):
-        if os.path.exists(self.pidfile):
+        if self.pidfile is not None and os.path.exists(self.pidfile):
             raise RuntimeError("The ERS daemon seems to be already running. If this is not the case, " +
                                "delete " + self.pidfile + " and try again.")
 
@@ -173,10 +185,17 @@ def setup_logging(args):
     logger = logging.getLogger('ers-daemon')
     logger.setLevel(10 + 10 * LOG_LEVELS.index(args.loglevel))
 
-    handler = logging.FileHandler(args.logfile)
-    handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
+    if args.logtype == 'file':
+        handler = logging.FileHandler(args.logfile)
+        handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
+    elif args.logtype == 'syslog':
+        handler = logging.handlers.SysLogHandler(address='/dev/log')
+        handler.setFormatter(logging.Formatter("%(message)s"))
+    else:
+        handler = None
 
-    logger.addHandler(handler)
+    if handler is not None:
+        logger.addHandler(handler)
 
     return logger
 
@@ -187,8 +206,11 @@ def run():
     parser.add_argument("-d", "--dbname", help="CouchDB database name", type=str, default=ERS_DEFAULT_DBNAME)
     parser.add_argument("-t", "--type", help="Type of instance", type=str, default=ERS_DEFAULT_PEER_TYPE,
                         choices=ERS_PEER_TYPES)
-    parser.add_argument("--pidfile", help="PID file for this ERS daemon instance", type=str, default='/var/run/ers_daemon.pid')
+    parser.add_argument("--pidfile", help="PID file for this ERS daemon instance (or 'none')",
+                        type=str, default='/var/run/ers_daemon.pid')
     parser.add_argument("--tries", help="Number of tries to connect to CouchDB", type=int, default=10)
+    parser.add_argument("--logtype", help="The log type (own file vs. syslog)", type=str, default='file',
+                        choices=['file', 'syslog'])
     parser.add_argument("--logfile", help="The log file to use", type=str, default='/var/log/ers_daemon.log')
     parser.add_argument("--loglevel", help="Log messages of this level and above", type=str, default='info',
                         choices=LOG_LEVELS)
