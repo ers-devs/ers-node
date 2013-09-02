@@ -122,14 +122,23 @@ class ERSReadOnly(object):
         return data.get(predicate, [])
 
     def search(self, prop, value=None):
-        """ Search local entities by property or property+value
-            Return a list of (entity, graph) pairs.
+        """ Search entities by property or property+value
+            Return a list of unique (entity, graph) pairs.
         """
         if value is None:
-            result = [tuple(r['value']) for r in self.db.view('index/by_property_value', startkey=[prop], endkey=[prop, {}])]
+            view_range = {'startkey': [prop], 'endkey': [prop, {}]}
         else:
-            result = [tuple(r['value']) for r in self.db.view('index/by_property_value', key=[prop, value])]
-        return result      
+            view_range = {'key': [prop, value]}
+        result = set([tuple(r['value']) for r in self.db.view('index/by_property_value', **view_range)])
+        for peer in self.get_peers():
+            try:
+                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
+                remote_result = remote.search(prop, value)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                continue
+            result.update(remote_result)
+        return list(result)
 
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
@@ -220,23 +229,6 @@ class ERSLocal(ERSReadOnly):
     def update_value(self, subject, object, graph=None):
         """update a value for an identifier+property (create it if it does not exist yet)"""
         raise NotImplementedError
-
-    def search(self, prop, value=None):
-        """ Search entities by property or property+value
-            Return a list of unique (entity, graph) pairs.
-        """
-        result = set(super(ERSLocal, self).search(prop, value))
-        for peer in self.get_peers():
-            try:
-                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
-                remote_result = remote.search(prop, value)
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-                continue
-
-            result.update(remote_result)
-
-        return list(result)
 
     def get_values(self, entity, prop):
         entity_data = self.get_annotation(entity)
