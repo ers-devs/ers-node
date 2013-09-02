@@ -85,6 +85,18 @@ class ERSReadOnly(object):
         self.fixed_peers = list(fixed_peers)
         self.db = self.server.get_db(dbname)
 
+    def get_annotation(self, entity):
+        result = self.get_data(entity)
+        for peer in self.get_peers():
+            try:
+                remote = ERSReadOnly(peer['server_url'], peer['dbname'], local_only=True)
+                remote_result = remote.get_data(entity)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                continue
+            merge_annotations(result, remote_result)
+        return result
+
     def get_data(self, subject, graph=None):
         """get all property+values for an identifier"""
         result = {}
@@ -208,20 +220,6 @@ class ERSLocal(ERSReadOnly):
     def update_value(self, subject, object, graph=None):
         """update a value for an identifier+property (create it if it does not exist yet)"""
         raise NotImplementedError
-
-    def get_annotation(self, entity):
-        result = self.get_data(entity)
-        for peer in self.get_peers():
-            try:
-                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
-                remote_result = remote.get_data(entity)
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-                continue
-
-            merge_annotations(result, remote_result)
-
-        return result
 
     def search(self, prop, value=None):
         """ Search entities by property or property+value
