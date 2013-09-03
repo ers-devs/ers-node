@@ -20,12 +20,6 @@ ERS_DEFAULT_PEER_TYPE = ERS_PEER_TYPE_CONTRIB
 DEFAULT_MODEL = ModelS()
 
 
-def merge_annotations(a, b):
-    for key, values in b.iteritems():
-        unique_values = set(values)
-        unique_values.update(a.get(key,[]))
-        a[key] = list(unique_values)
-
 class ERSReadOnly(object):
     def __init__(self,
                  server_url=r'http://admin:admin@127.0.0.1:5984/',
@@ -48,7 +42,7 @@ class ERSReadOnly(object):
             except:
                 sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
                 continue
-            merge_annotations(result, remote_result)
+            self._merge_annotations(result, remote_result)
         return result
 
     def get_data(self, subject, graph=None):
@@ -59,7 +53,7 @@ class ERSReadOnly(object):
         else:
             docs = [self.get_doc(subject, graph)]
         for doc in docs:
-            merge_annotations(result, self.model.get_data(doc, subject, graph))
+            self._merge_annotations(result, self.model.get_data(doc, subject, graph))
         return result
 
     def get_doc(self, subject, graph):
@@ -119,6 +113,12 @@ class ERSReadOnly(object):
                 'dbname': peer['dbname']
             })
         return result
+
+    def _merge_annotations(self, a, b):
+        for key, values in b.iteritems():
+            unique_values = set(values)
+            unique_values.update(a.get(key,[]))
+            a[key] = list(unique_values)
 
 
 class ERSLocal(ERSReadOnly):
