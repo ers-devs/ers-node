@@ -11,9 +11,7 @@ import gobject
 import logging
 import logging.handlers
 
-from ers import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_DEFAULT_DBNAME, ERS_DEFAULT_PEER_TYPE, DEFAULT_MODEL
-from ers import ERSPeerInfo
-
+from utils import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_DEFAULT_DBNAME, ERS_DEFAULT_PEER_TYPE, DEFAULT_MODEL
 
 class ERSPeerInfo(ServicePeer):
     """

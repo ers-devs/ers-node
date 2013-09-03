@@ -7,18 +7,7 @@ import sys
 from models import ModelS, ModelT
 from utils import EntityCache
 
-ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
-
-ERS_PEER_TYPE_CONTRIB = 'contrib'
-ERS_PEER_TYPE_BRIDGE = 'bridge'
-ERS_PEER_TYPES = [ERS_PEER_TYPE_CONTRIB, ERS_PEER_TYPE_BRIDGE]
-
-ERS_DEFAULT_DBNAME = 'ers'
-ERS_DEFAULT_PEER_TYPE = ERS_PEER_TYPE_CONTRIB
-
-# Document model is used to store data in CouchDB. The API is independent from the choice of model.
 DEFAULT_MODEL = ModelS()
-
 
 class ERSReadOnly(object):
     def __init__(self,
