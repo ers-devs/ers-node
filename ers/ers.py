@@ -114,12 +114,12 @@ class ERSReadOnly(object):
         except couchdbkit.exceptions.ResourceNotFound: 
             return None
 
-    def get_values(self, subject, predicate, graph=None):
+    def get_values(self, entity, prop):
         """ Get the value for a identifier+property (return null or a special value if it does not exist)
             Return a list of values or an empty list
         """
-        data = self.get_data(subject, graph)
-        return data.get(predicate, [])
+        entity_data = self.get_annotation(entity)
+        return entity_data.get(prop, [])
 
     def search(self, prop, value=None):
         """ Search entities by property or property+value
@@ -229,10 +229,6 @@ class ERSLocal(ERSReadOnly):
     def update_value(self, subject, object, graph=None):
         """update a value for an identifier+property (create it if it does not exist yet)"""
         raise NotImplementedError
-
-    def get_values(self, entity, prop):
-        entity_data = self.get_annotation(entity)
-        return entity_data.get(prop, [])
 
 
 if __name__ == '__main__':
