@@ -5,7 +5,6 @@ import re
 import sys
 
 from models import ModelS, ModelT
-from zeroconf import ServicePeer
 from utils import EntityCache
 
 ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
@@ -26,51 +25,6 @@ def merge_annotations(a, b):
         unique_values = set(values)
         unique_values.update(a.get(key,[]))
         a[key] = list(unique_values)
-
-class ERSPeerInfo(ServicePeer):
-    """
-    This class contains information on an ERS peer.
-    """
-    dbname = None
-    peer_type = None
-
-    def __init__(self, service_name, host, ip, port, dbname=ERS_DEFAULT_DBNAME, peer_type=ERS_DEFAULT_PEER_TYPE):
-        ServicePeer.__init__(self, service_name, ERS_AVAHI_SERVICE_TYPE, host, ip, port)
-        self.dbname = dbname
-        self.peer_type = peer_type
-
-    def __str__(self):
-        return "ERS peer on {0.host}(={0.ip}):{0.port} (dbname={0.dbname}, type={0.peer_type})".format(self)
-
-    def to_json(self):
-        return {
-            'name': self.service_name,
-            'host': self.host,
-            'ip': self.ip,
-            'port': self.port,
-            'dbname': self.dbname,
-            'type': self.peer_type
-        }
-
-    @staticmethod
-    def from_service_peer(svc_peer):
-        dbname = ERS_DEFAULT_DBNAME
-        peer_type = ERS_DEFAULT_PEER_TYPE
-
-        match = re.match(r'ERS on .* [(](.*)[)]$', svc_peer.service_name)
-        if match is None:
-            return None
-
-        for item in match.group(1).split(','):
-            param, sep, value = item.partition('=')
-
-            if param == 'dbname':
-                dbname = value
-            if param == 'type':
-                peer_type = value
-
-        return ERSPeerInfo(svc_peer.service_name, svc_peer.host, svc_peer.ip, svc_peer.port, dbname, peer_type)
-
 
 class ERSReadOnly(object):
     def __init__(self,
