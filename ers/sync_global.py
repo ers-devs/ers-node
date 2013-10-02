@@ -27,11 +27,13 @@ LIMIT_MAXSEQ_PER_OP = 1000
 SYNC_PERIOD_SEC=5
 # HTTP address of the global server 
 GLOBAL_SERVER_HOST = "127.0.0.1"
-GLOBAL_SERVER_PORT = 8080
+GLOBAL_SERVER_PORT = 8888
 # The RESTful endpoint for handling the last synchronized sequence
-GLOBAL_SERVER_HTTP_SEQ = "/ers/last_sync_seq"
+#GLOBAL_SERVER_HTTP_SEQ = "/ers/last_sync_seq"
+GLOBAL_SERVER_HTTP_SEQ = "/last_sync_seq"
 # RESTful endpoint for uploading a file containing document changes
-GLOBAL_SERVER_HTTP_BULKRUN = "/ers/bulkrun"
+#GLOBAL_SERVER_HTTP_BULKRUN = "/ers/bulkrun"
+GLOBAL_SERVER_HTTP_BULKRUN = "/bulkrun"
 # The filename used to dump the changes
 OUTPUT_FILENAME = Template("changes_$graph.log")
 
@@ -57,6 +59,7 @@ class GraphSynch(Thread):
             return r.text 
         else: 
             print 'Error getting the previous sequence number' 
+            print 'Maybe there is no graph ', self.graph, ' on the global server'
             print r.status_code, r.reason
             return -1
 
@@ -76,7 +79,7 @@ class GraphSynch(Thread):
         return  {
             "_id": "_design/filter",
             "filters": {
-                    "by_graph": "function(doc, req) { if(doc._id.substring(0, req.query.g.length) === req.query.g)  return true;  else return false; }"
+                    "by_graph": "function(doc, req) { if(doc._id.substring(0, req.query.g.length) === req.query.g && doc._id[req.query.g.length] === ' '  )  return true;  else return false; }"
                     }
                }
 
@@ -187,10 +190,13 @@ class SynchronizationManager(object):
 
 def test():
     synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
-    graph_to_synch = 'test'
-    synch_manager.start_synch(graph_to_synch)  
-    time.sleep(100)
-    synch_manager.stop_synch(graph_to_synch)
+    graph_to_synch1 = 'test'
+    synch_manager.start_synch(graph_to_synch1)  
+    graph_to_synch2 = 'test10'
+    synch_manager.start_synch(graph_to_synch2)  
+    time.sleep(60)
+    synch_manager.stop_synch(graph_to_synch1)
+    synch_manager.stop_synch(graph_to_synch2)
 
 if __name__ == '__main__':
     test()
