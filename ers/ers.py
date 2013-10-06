@@ -88,23 +88,37 @@ class ERSReadOnly(object):
         return entity_data.get(prop, [])
 
     def search(self, prop, value=None):
-        """ Search entities by property or property+value
-            Return a list of unique (entity, graph) pairs.
-        """
-        if value is None:
-            view_range = {'startkey': [prop], 'endkey': [prop, {}]}
-        else:
-            view_range = {'key': [prop, value]}
-        result = set([tuple(r['value']) for r in self.db.view('index/by_property_value', **view_range)])
-        for peer in self.get_peers():
-            try:
-                remote = ERSReadOnly(peer['server_url'], peer['dbname'])
-                remote_result = remote.search(prop, value)
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-                continue
-            result.update(remote_result)
-        return list(result)
+        '''
+        Search local entities by property or property+value
+        @return: a list of identifiers.
+        '''
+        # TODO Fix index
+        results = []
+        for doc in self.public_db.all_docs().all():
+            document = self.public_db.get(doc['id'])
+            if prop in document:
+                if value == None or value in document[prop]:
+                    results.append(document['@id'])
+        return results
+    
+    # def search(self, prop, value=None):
+    #     """ Search entities by property or property+value
+    #         Return a list of unique (entity, graph) pairs.
+    #     """
+    #     if value is None:
+    #         view_range = {'startkey': [prop], 'endkey': [prop, {}]}
+    #     else:
+    #         view_range = {'key': [prop, value]}
+    #     result = set([tuple(r['value']) for r in self.db.view('index/by_property_value', **view_range)])
+    #     for peer in self.get_peers():
+    #         try:
+    #             remote = ERSReadOnly(peer['server_url'], peer['dbname'])
+    #             remote_result = remote.search(prop, value)
+    #         except:
+    #             sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+    #             continue
+    #         result.update(remote_result)
+    #     return list(result)
 
     def exist(self, subject, graph):
         return self.db.doc_exist(self.model.couch_key(subject, graph))
