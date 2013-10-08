@@ -1,0 +1,31 @@
+#
+# Teodor Macicas, 08.Oct.2013 
+#
+# Some explanations about the usage of synch_global Python script. 
+#
+
+Python script to be launched: ers/ers-local/ers/sync_global.py
+
+Variables that may be changed accordingly:
+1. SYNC_PERIOD_SEC -> number of seconds between to consecutive synchronizations; maybe 
+a decent value between 10s and 30s would be fine 
+2. GLOBAL_SERVER_HOST -> the IP of the global server where ERS is running 
+3. GLOBAL_SERVER_PORT -> the PORT of the global server where ERS is running 
+4. GLOBAL_SERVER_HTTP_SEQ -> the path URL of ERS's servlet for accesing the sequence number;
+the important bit here is the first part of the path as ERS may be deployed as root app or not; 
+e.g. if deployed as root app, the value MUST be 'last_sync_seq' 
+5. GLOBAL_SERVER_HTTP_BULKRUN -> same as above 
+e.g. if deployed as root app, the value MUST be 'bulkrun' 
+
+If the script is intended to be tested or used as it is (i.e. without an integration 
+with the ERS local stuff), there is already in place a test function. First line creates 
+the ERSReadWrite object that needs to get the CouchDB url. Therefore, that should be set 
+accordingly. Second parameter is the database to be used. In the test, I used 'ers_models'. 
+
+Next step is to use the SynchronizationManager object you just created. There are two actions 
+that must be done:
+1. to start a synchronization thread passing the name of graph to be synched 
+2. to stop a synchronization thread passing the name of the graph 
+Step 2 would, as defined, stop the synch. If all threads are stoped, the script will return from 
+the test function. 
+
