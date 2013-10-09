@@ -3,15 +3,6 @@ from collections import defaultdict
 from StringIO import StringIO
 import rdflib
 
-ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
-
-ERS_PEER_TYPE_CONTRIB = 'contrib'
-ERS_PEER_TYPE_BRIDGE = 'bridge'
-ERS_PEER_TYPES = [ERS_PEER_TYPE_CONTRIB, ERS_PEER_TYPE_BRIDGE]
-
-ERS_DEFAULT_DBNAME = 'ers'
-ERS_DEFAULT_PEER_TYPE = ERS_PEER_TYPE_CONTRIB
-
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 
 def import_nt(registry, file_name, target_graph):
