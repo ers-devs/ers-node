@@ -12,9 +12,16 @@ import gobject
 import logging
 import logging.handlers
 
-from utils import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPES, ERS_DEFAULT_DBNAME, ERS_DEFAULT_PEER_TYPE
-from utils import ERS_PEER_TYPE_BRIDGE
 from ers import DEFAULT_MODEL
+
+ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
+
+ERS_PEER_TYPE_CONTRIB = 'contrib'
+ERS_PEER_TYPE_BRIDGE = 'bridge'
+ERS_PEER_TYPES = [ERS_PEER_TYPE_CONTRIB, ERS_PEER_TYPE_BRIDGE]
+
+ERS_DEFAULT_DBNAME = 'ers-public'
+ERS_DEFAULT_PEER_TYPE = ERS_PEER_TYPE_CONTRIB
 
 class ERSPeerInfo(zeroconf.ServicePeer):
     """
