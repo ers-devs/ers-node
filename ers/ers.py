@@ -17,11 +17,20 @@ class ERSReadOnly(object):
                  model=DEFAULT_MODEL,
                  fixed_peers=(),
                  local_only=False):
-        self.local_only = local_only
+        self._local_only = local_only
+        self.fixed_peers = [] if self._local_only else list(fixed_peers)
         self.server = couchdbkit.Server(server_url)
+        self._init_model(model)
+        self._init_databases()
+
+    def _init_databases(self):
+        self.public_db = self.server.get_db('ers-public')
+        self.private_db = self.server.get_db('ers-private')
+        self.cache_db = self.server.get_db('ers-cache')
+
+    def _init_model(self, model):
+        """Connect to model."""
         self.model = model
-        self.fixed_peers = list(fixed_peers)
-        self.db = self.server.get_db(dbname)
 
     def get_annotation(self, entity):
         result = self.get_data(entity)
@@ -41,7 +50,7 @@ class ERSReadOnly(object):
         """get all property+values for an identifier"""
         result = {}
         if graph is None:
-            docs = [d['doc'] for d in self.db.view('index/by_entity', include_docs=True, key=subject)]
+            docs = [d['doc'] for d in self.public_db.view('index/by_entity', include_docs=True, key=subject)]
         else:
             docs = [self.get_doc(subject, graph)]
         for doc in docs:
@@ -50,7 +59,7 @@ class ERSReadOnly(object):
 
     def get_doc(self, subject, graph):
         try:
-            return self.db.get(self.model.couch_key(subject, graph))
+            return self.public_db.get(self.model.couch_key(subject, graph))
         except couchdbkit.exceptions.ResourceNotFound: 
             return None
 
@@ -87,45 +96,46 @@ class ERSReadOnly(object):
         entity_data = self.get_annotation(entity)
         return entity_data.get(prop, [])
 
-    def search(self, prop, value=None):
-        '''
-        Search local entities by property or property+value
-        @return: a list of identifiers.
-        '''
-        # TODO Fix index
-        results = []
-        for doc in self.public_db.all_docs().all():
-            document = self.public_db.get(doc['id'])
-            if prop in document:
-                if value == None or value in document[prop]:
-                    results.append(document['@id'])
-        return results
-    
     # def search(self, prop, value=None):
-    #     """ Search entities by property or property+value
-    #         Return a list of unique (entity, graph) pairs.
-    #     """
-    #     if value is None:
-    #         view_range = {'startkey': [prop], 'endkey': [prop, {}]}
-    #     else:
-    #         view_range = {'key': [prop, value]}
-    #     result = set([tuple(r['value']) for r in self.db.view('index/by_property_value', **view_range)])
-    #     for peer in self.get_peers():
-    #         try:
-    #             remote = ERSReadOnly(peer['server_url'], peer['dbname'])
-    #             remote_result = remote.search(prop, value)
-    #         except:
-    #             sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-    #             continue
-    #         result.update(remote_result)
-    #     return list(result)
+    #     '''
+    #     Search local entities by property or property+value
+    #     @return: a list of identifiers.
+    #     '''
+    #     # TODO Fix index
+    #     results = []
+    #     for doc in self.public_db.all_docs().all():
+    #         document = self.public_db.get(doc['id'])
+    #         if prop in document:
+    #             if value == None or value in document[prop]:
+    #                 results.append(document['@id'])
+    #     return results
+    
+    def search(self, prop, value=None):
+        """ Search entities by property or property+value
+            Return a list of unique (entity, graph) pairs.
+        """
+        if value is None:
+            view_range = {'startkey': [prop], 'endkey': [prop, {}]}
+        else:
+            view_range = {'key': [prop, value]}
+
+        result = set([r['value'] for r in self.public_db.view('index/by_property_value', **view_range)])
+        for peer in self.get_peers():
+            try:
+                remote = ERSReadOnly(peer['server_url'], peer['dbname'], local_only=True)
+                remote_result = remote.search(prop, value)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                continue
+            result.update(remote_result)
+        return list(result)
 
     def exist(self, subject, graph):
-        return self.db.doc_exist(self.model.couch_key(subject, graph))
+        return self.public_db.doc_exist(self.model.couch_key(subject, graph))
 
     def get_peers(self):
         result = []
-        if self.local_only:
+        if self._local_only:
             return result
         for peer_info in self.fixed_peers:
             if 'url' in peer_info:
@@ -138,7 +148,7 @@ class ERSReadOnly(object):
             dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
 
             result.append({'server_url': server_url, 'dbname': dbname})
-        state_doc = self.db.open_doc('_local/state')
+        state_doc = self.public_db.open_doc('_local/state')
         for peer in state_doc['peers']:
             result.append({
                 'server_url': r'http://admin:admin@' + peer['ip'] + ':' + str(peer['port']) + '/',
@@ -172,33 +182,33 @@ class ERSLocal(ERSReadOnly):
                  fixed_peers=(),
                  local_only=False,
                  reset_database=False):
-        self.local_only = local_only
+        self._local_only = local_only
+        self.fixed_peers = [] if self._local_only else list(fixed_peers)
 
         # Connect to CouchDB
         self.server = couchdbkit.Server(server_url)
 
-        # Reset the DB if requested
+        # Connect databases
+        self._init_databases(reset_database)
+
+        # Connect to the internal model used to store the triples
+        self._init_model(model)
+
+    def _init_databases(self, reset_database):
         if reset_database:
             try:
                 self.server.delete_db('ers-public')
                 self.server.delete_db('ers-private')
                 self.server.delete_db('ers-cache')
-                # TODO Delete
-                self.server.delete_db(dbname)
             except couchdbkit.ResourceNotFound:
                 pass
-
-        # Init the DBs
         self.public_db = self.server.get_or_create_db('ers-public')
         self.private_db = self.server.get_or_create_db('ers-private')
         self.cache_db = self.server.get_or_create_db('ers-cache')
-        # TODO Delete
-        self.db = self.server.get_or_create_db(dbname)
 
-        # Connect to the internal model used to store the triples
+    def _init_model(self, model):
+        """Connect to model and create required docs."""
         self.model = model
-
-        # Pre-populate the public DB if requested
         for doc in self.model.initial_docs_public():
             if not self.public_db.doc_exist(doc['_id']):
                 self.public_db.save_doc(doc)
@@ -208,12 +218,6 @@ class ERSLocal(ERSReadOnly):
         for doc in self.model.initial_docs_private():
             if not self.private_db.doc_exist(doc['_id']):
                 self.private_db.save_doc(doc)
-        # TODO Delete
-        for doc in self.model.initial_docs():
-            if not self.db.doc_exist(doc['_id']):
-                self.db.save_doc(doc)
-
-        self.fixed_peers = list(fixed_peers)
 
     def add_data(self, s, p, o, g):
         """Adds the value for the given property in the given entity. Create the entity if it does not exist yet)"""
@@ -226,34 +230,34 @@ class ERSLocal(ERSReadOnly):
         # Assumes there is only one entity per doc.
         if graph is None:
             docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                    for r in self.db.view('index/by_entity', key=entity)]
+                    for r in self.public_db.view('index/by_entity', key=entity)]
         else:
             docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                    for r in self.db.view('index/by_entity', key=entity)
+                    for r in self.public_db.view('index/by_entity', key=entity)
                     if r['value']['g'] == graph]
-        return self.db.save_docs(docs)
+        return self.public_db.save_docs(docs)
 
     def delete_value(self, entity, prop, graph=None):
         """Deletes all of the user's values for the given property in the given entity."""
         if graph is None:
-            docs = [r['doc'] for r in self.db.view('index/by_entity', key=entity, include_docs=True)]
+            docs = [r['doc'] for r in self.public_db.view('index/by_entity', key=entity, include_docs=True)]
         else:
-            docs = [r['doc'] for r in self.db.view('index/by_entity', key=entity, include_docs=True)
+            docs = [r['doc'] for r in self.public_db.view('index/by_entity', key=entity, include_docs=True)
                              if r['value']['g'] == graph]
         for doc in docs:
             self.model.delete_property(doc, prop)
-        return self.db.save_docs(docs)        
+        return self.public_db.save_docs(docs)        
 
     def write_cache(self, cache, graph):
         docs = []
         # TODO: check if sorting keys makes it faster
-        couch_docs = self.db.view(self.model.view_name, include_docs=True,
+        couch_docs = self.public_db.view(self.model.view_name, include_docs=True,
                                   keys=[self.model.couch_key(k, graph) for k in cache])
         for doc in couch_docs:
             couch_doc = doc.get('doc', {'_id': doc['key']})
             self.model.add_data(couch_doc, cache)
             docs.append(couch_doc)
-        self.db.save_docs(docs)
+        self.public_db.save_docs(docs)
 
     def update_value(self, subject, object, graph=None):
         """update a value for an identifier+property (create it if it does not exist yet)"""
