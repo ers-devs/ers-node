@@ -115,6 +115,7 @@ class GraphSynch(Thread):
                         o_file.write(doc_id + " " + param2 + " " + value + " \"1\" . \n")
                     else:
                         for list_value in c['doc'][param]:
+                            list_value = str(list_value)
                             if list_value.startswith('http'):
                                 value = "<" + list_value + ">" 
                             else:
@@ -154,7 +155,8 @@ class GraphSynch(Thread):
                     data={"g" : "<"+self.graph+">"})
             if r.status_code == 200: 
                 # it means that this step of synchronization is working 
-                self.set_new_seq_num(last_seq_n)
+                """ TODO: UNCOMMENT THIS LINE 
+                self.set_new_seq_num(last_seq_n) """ 
                 print 'Last synchronization sequence number is ' + str(last_seq_n)
             
 
