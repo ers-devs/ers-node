@@ -209,8 +209,8 @@ class ERSDaemon:
         self.logger.debug("Peer left: " + str(ex_peer))
 
         del self._peers[peer.service_name]
-        if ers_peer.peer_type == ERS_PEER_TYPE_BRIDGE:
-            del self._bridges[ers_peer.service_name]
+        if peer.peer_type == ERS_PEER_TYPE_BRIDGE:
+            del self._bridges[peer.service_name]
 
         self._update_peers_in_couchdb()
         self._update_replication_links()

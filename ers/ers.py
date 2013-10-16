@@ -318,8 +318,6 @@ class ERSLocal(ERSReadOnly):
         '''
         @return a unique identifier for this ERS node
         '''
-        # Get the UUID assigned to CouchDB
-#       return self.server.info()['uuid']
         return str(uuid.getnode())
 
 
