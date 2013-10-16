@@ -82,7 +82,12 @@ class ERSDaemon:
     _db = None
     _model = None
     _repl_db = None
+
+    # List of all peers
     _peers = None
+
+    # List of bridges
+    _bridges = None
 
     def __init__(self, peer_type=ERS_DEFAULT_PEER_TYPE, port=5984, dbname=ERS_DEFAULT_DBNAME,
                  pidfile='/var/run/ers_daemon.pid', tries=10, logger=None):
@@ -94,6 +99,7 @@ class ERSDaemon:
         self.logger = logger if logger is not None else logging.getLogger('ers-daemon')
 
         self._peers = {}
+        self._bridges = {}
 
     def start(self):
         self.logger.info("Starting ERS daemon")
@@ -170,6 +176,7 @@ class ERSDaemon:
             self._service.unpublish()
 
         self._peers = {}
+        self._bridges = {}
         self._update_peers_in_couchdb()
         self._clear_replication()
 
@@ -187,6 +194,8 @@ class ERSDaemon:
         self.logger.debug("Peer joined: " + str(ers_peer))
 
         self._peers[ers_peer.service_name] = ers_peer
+        if ers_peer.peer_type == ERS_PEER_TYPE_BRIDGE:
+            self._bridges[ers_peer.service_name] = ers_peer
 
         self._update_peers_in_couchdb()
         self._update_replication_links()
@@ -200,26 +209,30 @@ class ERSDaemon:
         self.logger.debug("Peer left: " + str(ex_peer))
 
         del self._peers[peer.service_name]
+        if peer.peer_type == ERS_PEER_TYPE_BRIDGE:
+            del self._bridges[peer.service_name]
 
         self._update_peers_in_couchdb()
         self._update_replication_links()
 
     def _update_peers_in_couchdb(self):
         state_doc = self._db.open_doc('_local/state')
-        state_doc['peers'] = [peer.to_json() for peer in self._peers.values()]
+
+        # If there are bridges, do not record other peers in the state_doc.
+        visible_peers = self._bridges or self._peers
+        state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
         self._db.save_doc(state_doc)
 
     def _replication_doc_id(self, peer):
         return 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
 
     def _update_replication_links(self):
-        # Replicate to all bridges
         desired_repl_docs = [{
             '_id': self._replication_doc_id(peer),
             'source': self.dbname,
             'target': r'http://admin:admin@{0}:{1}/{2}'.format(peer.ip, peer.port, peer.dbname),
             'continuous': True
-        } for peer in self._peers.values() if peer.peer_type == ERS_PEER_TYPE_BRIDGE]
+        } for peer in self._bridges.values()]
 
         self._apply_desired_repl_docs(desired_repl_docs)
 

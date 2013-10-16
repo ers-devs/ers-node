@@ -39,10 +39,10 @@ class LocalModelBase(object):
         return {"_id": "_local/content", 'entity_name': []}
     
     def initial_docs_public(self):
-        return [ self.index_doc() ]
+        return [ self.index_doc(), self.state_doc() ]
     
     def initial_docs_private(self):
-        return [ self.index_doc(), self.state_doc() ]
+        return [ self.index_doc() ]
     
     def initial_docs_cache(self):
         return [ self.index_doc(), self.content_doc() ]
@@ -79,10 +79,11 @@ class ModelS(LocalModelBase):
                             "map": """
                             function(doc) {
                                 if ('@id' in doc) {
+                                    var entity = doc['@id'];
                                     for (property in doc) {
-                                        if (property[0] != '_') {
+                                        if (property[0] != '_' && property[0] != '@') {
                                             doc[property].forEach(
-                                              function(value) {emit(doc['@id'], [property, value])}
+                                              function(value) {emit([property, value], entity)}
                                             );
                                         }
                                     }

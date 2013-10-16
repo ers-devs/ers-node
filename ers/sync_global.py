@@ -128,6 +128,7 @@ class GraphSynch(Thread):
                         o_file.write(doc_id + " " + param2 + " " + value + " \"1\" . \n")
                     else:
                         for list_value in c['doc'][param]:
+                            list_value = str(list_value)
                             if list_value.startswith('http'):
                                 value = "<" + list_value + ">" 
                             else:
