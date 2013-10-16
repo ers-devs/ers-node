@@ -11,7 +11,7 @@ import requests
 from threading import Thread
 from time import sleep 
 from collections import defaultdict
-from models import ModelS, ModelT
+from models import ModelS
 from couchdbkit.changes import ChangesStream
 from string import Template
 
