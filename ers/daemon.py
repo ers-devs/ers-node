@@ -213,13 +213,12 @@ class ERSDaemon:
         return 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
 
     def _update_replication_links(self):
-        # Replicate to all bridges
         desired_repl_docs = [{
             '_id': self._replication_doc_id(peer),
             'source': self.dbname,
             'target': r'http://admin:admin@{0}:{1}/{2}'.format(peer.ip, peer.port, peer.dbname),
             'continuous': True
-        } for peer in self._peers.values() if peer.peer_type == ERS_PEER_TYPE_BRIDGE]
+        } for peer in self._peers.values()]
 
         self._apply_desired_repl_docs(desired_repl_docs)
 
