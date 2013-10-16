@@ -50,8 +50,8 @@ class GraphSynch(Thread):
         self.name = name
         self.graph = graph
         self.finished = False
-        if not self.ers.db.doc_exist(self.filter_by_graph_doc()['_id']):
-            self.ers.db.save_doc(self.filter_by_graph_doc())
+        if not self.ers.public_db.doc_exist(self.filter_by_graph_doc()['_id']):
+            self.ers.public_db.save_doc(self.filter_by_graph_doc())
         self.output_filename = OUTPUT_FILENAME.substitute(graph = self.graph)
         
 
@@ -156,10 +156,10 @@ class GraphSynch(Thread):
             #print "Previous sequence: " + str(prev_seq_n)
 	    # if synch everything, then do not use the filter 
 	    if self.graph == GLOBAL_TARGET_KEYSPACE: 
-            	stream = ChangesStream(self.ers.db, feed="normal", since=prev_seq_n, 
+            	stream = ChangesStream(self.ers.public_db, feed="normal", since=prev_seq_n, 
                         include_docs=True, limit=LIMIT_MAXSEQ_PER_OP)
 	    else:
-                stream = ChangesStream(self.ers.db, feed="normal", since=prev_seq_n, 
+                stream = ChangesStream(self.ers.public_db, feed="normal", since=prev_seq_n, 
                         include_docs=True, limit=LIMIT_MAXSEQ_PER_OP, filter="filter/by_graph", g=self.graph)
 
             # dump to file the changes and post it to global server is not empty
@@ -229,5 +229,5 @@ def test():
 
 if __name__ == '__main__':
     test()
-    """ synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
-    synch_manager.start_synch_everything()   """
+    """synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
+    synch_manager.start_synch_everything() """
