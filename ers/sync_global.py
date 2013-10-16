@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import sys
+import random
 import couchdbkit
 import couchdbkit.changes
 import rdflib
@@ -11,7 +13,7 @@ import requests
 from threading import Thread
 from time import sleep 
 from collections import defaultdict
-from models import ModelS, ModelT
+from models import ModelS
 from couchdbkit.changes import ChangesStream
 from string import Template
 
@@ -24,18 +26,20 @@ DEFAULT_MODEL = ModelS()
 # Maximum this number of changes are retrieved once. It can be an issue if the DB has never been synchronized
 LIMIT_MAXSEQ_PER_OP = 1000
 # A timeout of this amount of secs is run inbetween two consecutive synchronizations.
-SYNC_PERIOD_SEC=5
+SYNC_PERIOD_SEC=30
+# the global keyspace where all the synched data is stored
+GLOBAL_TARGET_KEYSPACE = "sync_bridges"
 # HTTP address of the global server 
 GLOBAL_SERVER_HOST = "127.0.0.1"
-GLOBAL_SERVER_PORT = 8888
+GLOBAL_SERVER_PORT = 8080
 # The RESTful endpoint for handling the last synchronized sequence
 #GLOBAL_SERVER_HTTP_SEQ = "/ers/last_sync_seq"
-GLOBAL_SERVER_HTTP_SEQ = "/last_sync_seq"
+GLOBAL_SERVER_HTTP_SEQ = "/ers/last_sync_seq"
 # RESTful endpoint for uploading a file containing document changes
 #GLOBAL_SERVER_HTTP_BULKRUN = "/ers/bulkrun"
-GLOBAL_SERVER_HTTP_BULKRUN = "/bulkrun"
+GLOBAL_SERVER_HTTP_BULKRUN = "/ers/bulkrun"
 # The filename used to dump the changes
-OUTPUT_FILENAME = Template("changes_$graph.log")
+OUTPUT_FILENAME = Template("/tmp/changes_$graph.log")
 
 
 class GraphSynch(Thread):
@@ -94,10 +98,19 @@ class GraphSynch(Thread):
             last_seq_n = c['seq']
             # Has the document been deleted? 
             if 'deleted' in c and c['deleted'] == True: 
-                doc_id = "<"+c['id'][len(self.graph)+1:]+">"
+		if self.graph == GLOBAL_TARGET_KEYSPACE:
+                    doc_id = "<"+c['id']+">"
+		else:
+                    doc_id = "<"+c['id'][len(self.graph)+1:]+">"
                 o_file.write(doc_id + " <NULL> <NULL> \"4\" . \n")
             else: 
-                doc_id = "<"+c['doc']['_id'][len(self.graph)+1:]+">"
+		if self.graph == GLOBAL_TARGET_KEYSPACE:
+	            doc_id = str("<"+c['doc']['_id']+">")
+		    # do not synch design docs
+		    if doc_id.startswith("<_design"):
+		       continue
+		else:
+	            doc_id = "<"+c['doc']['_id'][len(self.graph)+1:]+">"
                 add_delete = False
                 for param in c['doc'].keys():  
                     if param == '_rev' or param == '_id': 
@@ -133,14 +146,21 @@ class GraphSynch(Thread):
             if self.finished:
                 break
             time.sleep(SYNC_PERIOD_SEC)
+
             # get previous successfully synchronized sequence from global server 
             prev_seq_n = int(self.get_previous_seq_num())
             if prev_seq_n == -1: 
                 continue
 
             #print "Previous sequence: " + str(prev_seq_n)
-            stream = ChangesStream(self.ers.db, feed="normal", since=prev_seq_n, 
+	    # if synch everything, then do not use the filter 
+	    if self.graph == GLOBAL_TARGET_KEYSPACE: 
+            	stream = ChangesStream(self.ers.db, feed="normal", since=prev_seq_n, 
+                        include_docs=True, limit=LIMIT_MAXSEQ_PER_OP)
+	    else:
+                stream = ChangesStream(self.ers.db, feed="normal", since=prev_seq_n, 
                         include_docs=True, limit=LIMIT_MAXSEQ_PER_OP, filter="filter/by_graph", g=self.graph)
+
             # dump to file the changes and post it to global server is not empty
             last_seq_n = self.dump_changes_to_file(prev_seq_n, stream) 
             # are there entities to be synchronized?
@@ -154,6 +174,7 @@ class GraphSynch(Thread):
                     data={"g" : "<"+self.graph+">"})
             if r.status_code == 200: 
                 # it means that this step of synchronization is working 
+		""" UNCOMMENT NEXT LINE !!!!!!!!!!!  """
                 self.set_new_seq_num(last_seq_n)
                 print 'Last synchronization sequence number is ' + str(last_seq_n)
             
@@ -177,6 +198,12 @@ class SynchronizationManager(object):
         # add the new thread into the dictionary
         self.active_repl[self.get_thread_name(graph)] = new_synch
         
+    def start_synch_everything(self):
+        new_synch = GraphSynch(self.ers, GLOBAL_TARGET_KEYSPACE, GLOBAL_TARGET_KEYSPACE)
+        new_synch.start()
+        # add the new thread into the dictionary
+        self.active_repl[GLOBAL_TARGET_KEYSPACE] = new_synch
+	
        
     def stop_synch(self, graph):
         if self.get_thread_name(graph) in self.active_repl: 
@@ -186,18 +213,20 @@ class SynchronizationManager(object):
         else:
             print 'Synchronization thread for graph ' + graph + ' does not exist.'
 
+    def stop_synch_everything(self):
+	thread = self.active_repl[GLOBAL_TARGET_KEYSPACE]
+	if thread.isAlive(): 
+	   thread.set_finished()
+
     
 
 def test():
-    synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
-    graph_to_synch1 = 'test'
-    synch_manager.start_synch(graph_to_synch1)  
-    graph_to_synch2 = 'test10'
-    synch_manager.start_synch(graph_to_synch2)  
-    time.sleep(60)
-    synch_manager.stop_synch(graph_to_synch1)
-    synch_manager.stop_synch(graph_to_synch2)
+    synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
+    synch_manager.start_synch_everything()  
+    time.sleep(6)
+    synch_manager.stop_synch_everything()
 
 if __name__ == '__main__':
     test()
-
+    """ synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
+    synch_manager.start_synch_everything()   """
