@@ -83,8 +83,23 @@ class ERSReadOnly(object):
             if '@id' in document and document['@id'] == entity_name:
                 entity.add_document(document, 'cache')
          
-        # TODO : Get documents out of public/cache of connected peers
+        # Get documents out of public of connected peers
+        for peer in self.get_peers():
+            remote_docs = []
+            try:
+                remote_docs = couchdbkit.Server(peer['server_url'])[peer['dbname']].view(
+                    'index/by_entity',
+                    wrapper = lambda r: r['doc'],
+                    key=entity_name,
+                    include_docs=True)
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+            else:
+                for doc in remote_docs:
+                    entity.add_document(remote_result['doc'], 'remote')
         
+        # TODO : Get documents out of cache of connected peers
+       
         # Return the entity
         return entity
     
