@@ -39,7 +39,7 @@ GLOBAL_SERVER_HTTP_SEQ = "/ers/last_sync_seq"
 #GLOBAL_SERVER_HTTP_BULKRUN = "/ers/bulkrun"
 GLOBAL_SERVER_HTTP_BULKRUN = "/ers/bulkrun"
 # The filename used to dump the changes
-OUTPUT_FILENAME = Template("/tmp/changes_$graph.log")
+OUTPUT_FILENAME = Template("/www-data/changes_$graph.log")
 
 
 class GraphSynch(Thread):
@@ -98,22 +98,25 @@ class GraphSynch(Thread):
             last_seq_n = c['seq']
             # Has the document been deleted? 
             if 'deleted' in c and c['deleted'] == True: 
+		# if we synch everything (i.e. not a thread per graph and not id='graph id' data model)
 		if self.graph == GLOBAL_TARGET_KEYSPACE:
                     doc_id = "<"+c['id']+">"
 		else:
                     doc_id = "<"+c['id'][len(self.graph)+1:]+">"
                 o_file.write(doc_id + " <NULL> <NULL> \"4\" . \n")
             else: 
+		# if we synch everything (i.e. not a thread per graph and not id='graph id' data model)
 		if self.graph == GLOBAL_TARGET_KEYSPACE:
-	            doc_id = str("<"+c['doc']['_id']+">")
 		    # do not synch design docs
-		    if doc_id.startswith("<_design"):
-		       continue
+		    if c['doc']['_id'].startswith("_design"):
+			continue
+	            doc_id = str("<"+c['doc']['@id']+">")
 		else:
 	            doc_id = "<"+c['doc']['_id'][len(self.graph)+1:]+">"
+
                 add_delete = False
                 for param in c['doc'].keys():  
-                    if param == '_rev' or param == '_id': 
+                    if param == '_rev' or param == '_id' or param == '@id': 
                         continue
                     if param.startswith('http'):
                         param2 = "<" + param + ">"
@@ -150,6 +153,8 @@ class GraphSynch(Thread):
 
             # get previous successfully synchronized sequence from global server 
             prev_seq_n = int(self.get_previous_seq_num())
+	    """ COMMENT THIS LINE (used for tests)
+	    prev_seq_n = 2 """
             if prev_seq_n == -1: 
                 continue
 
@@ -173,10 +178,11 @@ class GraphSynch(Thread):
             r = requests.post("http://"+GLOBAL_SERVER_HOST+":"+str(GLOBAL_SERVER_PORT)
                     +GLOBAL_SERVER_HTTP_BULKRUN, files={self.output_filename: open(self.output_filename, 'rb')},
                     data={"g" : "<"+self.graph+">"})
+
             if r.status_code == 200: 
                 # it means that this step of synchronization is working 
-		""" UNCOMMENT NEXT LINE !!!!!!!!!!!  """
-                self.set_new_seq_num(last_seq_n)
+		""" UNCOMMENT NEXT LINE (not used in case of testing) """
+                self.set_new_seq_num(last_seq_n) 
                 print 'Last synchronization sequence number is ' + str(last_seq_n)
             
 
@@ -222,12 +228,12 @@ class SynchronizationManager(object):
     
 
 def test():
-    synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
+    synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/'))
     synch_manager.start_synch_everything()  
     time.sleep(6)
     synch_manager.stop_synch_everything()
 
 if __name__ == '__main__':
-    test()
-    """synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/', dbname='ers_models', model=DEFAULT_MODEL))
-    synch_manager.start_synch_everything() """
+    """test()"""
+    synch_manager = SynchronizationManager(ERSReadWrite(server_url=r'http://admin:admin@127.0.0.1:5984/'))
+    synch_manager.start_synch_everything()
