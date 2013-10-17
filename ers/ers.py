@@ -96,7 +96,7 @@ class ERSReadOnly(object):
                 sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
             else:
                 for doc in remote_docs:
-                    entity.add_document(remote_result['doc'], 'remote')
+                    entity.add_document(doc, 'remote')
         
         # TODO : Get documents out of cache of connected peers
        
