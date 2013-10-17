@@ -18,14 +18,17 @@ e.g. if deployed as root app, the value MUST be 'last_sync_seq'
 e.g. if deployed as root app, the value MUST be 'bulkrun' 
 
 If the script is intended to be tested or used as it is (i.e. without an integration 
-with the ERS local stuff), there is already in place a test function. First line creates 
-the ERSReadWrite object that needs to get the CouchDB url. Therefore, that should be set 
-accordingly. Second parameter is the database to be used. In the test, I used 'ers_models'. 
+with the ERS local stuff), there is already in place a test function. 
+First line creates the ERSLocal object that needs to get the CouchDB url. Therefore, that should be set 
+accordingly. The database to be synchronized is 'ers-public'. 
 
-Next step is to use the SynchronizationManager object you just created. There are two actions 
-that must be done:
-1. to start a synchronization thread passing the name of graph to be synched 
-2. to stop a synchronization thread passing the name of the graph 
-Step 2 would, as defined, stop the synch. If all threads are stoped, the script will return from 
-the test function. 
+Next step is to use the SynchronizationManager object you just created. There are two possible 
+scenarios as follows:
+1. to use one thread per each graph to be synchronized (this is the initial version when the 'id' of a
+document contains 'graph_name URN'); if needed, the thread can be stopped
+2. to start synchronization of the entire database (i.e. 'ers-public') - this is adapted to the current 
+data model; however, the problem is that whenever a delete occurs, _changes feed gives us the 'id' of 
+such a document, but not the fields it contains - therefore, '@id' field is missing and the global 
+cannot delete this document; as before, this synchronization thread can be stopped or the entire 
+program killed
 
