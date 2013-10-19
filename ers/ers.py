@@ -5,6 +5,9 @@ import re
 import sys
 import uuid
 
+from hashlib import md5
+from socket import gethostname
+
 from models import ModelS
 from utils import EntityCache
 
@@ -22,6 +25,7 @@ class ERSReadOnly(object):
         self.server = couchdbkit.Server(server_url)
         self._init_model(model)
         self._init_databases()
+        self._init_host_urn()
 
     def _init_databases(self):
         self.public_db = self.server.get_db('ers-public')
@@ -31,6 +35,10 @@ class ERSReadOnly(object):
     def _init_model(self, model):
         """Connect to model."""
         self.model = model
+
+    def _init_host_urn(self):
+        fingerprint = md5(gethostname()).hexdigest()
+        self.host_urn = "urn:ers:host:{}".format(fingerprint)
 
     def get_annotation(self, entity):
         result = self.get_data(entity)
@@ -283,7 +291,10 @@ class ERSLocal(ERSReadOnly):
         Create a new entity, return it and store in as a new document in the public store
         '''
         # Create a new document
-        document = {'@id' : entity_name}
+        document =  {
+                        '@id' : entity_name,
+                        '_owner' : self.host_urn
+                    }
         self.public_db.save_doc(document)
         
         # Create the entity
