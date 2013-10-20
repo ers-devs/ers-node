@@ -12,6 +12,7 @@ from models import ModelS
 from utils import EntityCache
 
 DEFAULT_MODEL = ModelS()
+SERVER_TIMEOUT = 300
 
 class ERSReadOnly(object):
     def __init__(self,
@@ -39,6 +40,13 @@ class ERSReadOnly(object):
     def _init_host_urn(self):
         fingerprint = md5(gethostname()).hexdigest()
         self.host_urn = "urn:ers:host:{}".format(fingerprint)
+
+    def _get_docs_by_entity(self, db, entity_name):
+        return db.view('index/by_entity',
+                        wrapper = lambda r: r['doc'],
+                        key=entity_name,
+                        include_docs=True)
+
 
     def get_annotation(self, entity):
         result = self.get_data(entity)
@@ -80,35 +88,34 @@ class ERSReadOnly(object):
         entity = Entity(entity_name)
         
         # Search for related documents in public
-        for doc in self.public_db.all_docs().all():
-            document = self.public_db.get(doc['id'])
-            if '@id' in document and document['@id'] == entity_name:
-                entity.add_document(document, 'public')
-                
+        public_docs = self._get_docs_by_entity(self.public_db, entity_name)
+        for doc in public_docs:
+            entity.add_document(doc, 'public')
+
         # Do the same in the cache
-        for doc in self.cache_db.all_docs().all():
-            document = self.cache_db.get(doc['id'])
-            if '@id' in document and document['@id'] == entity_name:
-                entity.add_document(document, 'cache')
+        cached_docs = self._get_docs_by_entity(self.cache_db, entity_name)
+        for doc in cached_docs:
+            entity.add_document(doc, 'cache')
          
-        # Get documents out of public of connected peers
+        # Get documents out of public/cache of connected peers
         for peer in self.get_peers():
-            remote_docs = []
             try:
-                remote_docs = couchdbkit.Server(peer['server_url'])[peer['dbname']].view(
-                    'index/by_entity',
-                    wrapper = lambda r: r['doc'],
-                    key=entity_name,
-                    include_docs=True)
+                remote_server = couchdbkit.Server(  peer['server_url'],
+                                                    timeout = SERVER_TIMEOUT)
             except:
                 sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-            else:
-                for doc in remote_docs:
-                    entity.add_document(doc, 'remote')
-        
-        # TODO : Get documents out of cache of connected peers
-       
-        # Return the entity
+                continue
+
+            for dbname in ('ers-public', 'ers-cache'):
+                remote_docs = []
+                try:
+                    remote_docs = self._get_docs_by_entity(
+                        remote_server[dbname], entity_name)
+                except:
+                    sys.stderr.write("Warning: failed to query {1} on remote peer {0}".format(peer, dbname))
+                else:
+                    for doc in remote_docs:
+                        entity.add_document(doc, 'remote')
         return entity
     
 
