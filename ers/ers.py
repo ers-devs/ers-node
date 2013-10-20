@@ -126,20 +126,6 @@ class ERSReadOnly(object):
         entity_data = self.get_annotation(entity)
         return entity_data.get(prop, [])
 
-    # def search(self, prop, value=None):
-    #     '''
-    #     Search local entities by property or property+value
-    #     @return: a list of identifiers.
-    #     '''
-    #     # TODO Fix index
-    #     results = []
-    #     for doc in self.public_db.all_docs().all():
-    #         document = self.public_db.get(doc['id'])
-    #         if prop in document:
-    #             if value == None or value in document[prop]:
-    #                 results.append(document['@id'])
-    #     return results
-    
     def search(self, prop, value=None):
         """ Search entities by property or property+value
             Return a list of unique (entity, graph) pairs.
