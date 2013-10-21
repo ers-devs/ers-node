@@ -47,7 +47,6 @@ class ERSReadOnly(object):
                         key=entity_name,
                         include_docs=True)
 
-
     def get_annotation(self, entity):
         result = self.get_data(entity)
 
@@ -286,7 +285,7 @@ class ERSLocal(ERSReadOnly):
         # Create a new document
         document =  {
                         '@id' : entity_name,
-                        '_owner' : self.host_urn
+                        '@owner' : self.host_urn
                     }
         self.public_db.save_doc(document)
         
