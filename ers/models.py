@@ -70,28 +70,27 @@ class ModelS(LocalModelBase):
     @classmethod
     def index_doc(cls):
         return  {
-                "_id": "_design/index",
-                "views": {
-                            "by_entity": {
-                                "map": "function(doc) {if ('@id' in doc) {emit(doc['@id'], {'rev': doc._rev, 'g': doc._id})}}"
-                            },
-                            "by_property_value": {
-                            "map": """
-                            function(doc) {
-                                if ('@id' in doc) {
-                                    var entity = doc['@id'];
-                                    for (property in doc) {
-                                        if (property[0] != '_' && property[0] != '@') {
-                                            doc[property].forEach(
-                                              function(value) {emit([property, value], entity)}
-                                            );
-                                        }
+            "_id": "_design/index",
+            "views": {
+                "by_entity": {
+                    "map": "function(doc) {if ('@id' in doc) {emit(doc['@id'], {'rev': doc._rev, 'g': doc._id})}}"
+                },
+                "by_property_value": {
+                    "map": """
+                        function(doc) {
+                            if ('@id' in doc) {
+                                var entity = doc['@id'];
+                                for (property in doc) {
+                                    if (property[0] != '_' && property[0] != '@') {
+                                        doc[property].forEach(
+                                          function(value) {emit([property, value], entity)}
+                                        );
                                     }
                                 }
                             }
-                            """
-        }
-        }
+                        }  """
+                }
+            }
         }
 
     # def index_doc(cls):
