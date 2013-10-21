@@ -209,6 +209,8 @@ class ERSLocal(ERSReadOnly):
         # Connect to the internal model used to store the triples
         self._init_model(model)
 
+        self._init_host_urn()
+
     def _init_databases(self, reset_database):
         if reset_database:
             try:
