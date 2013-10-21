@@ -288,6 +288,7 @@ class ERSDaemon:
                     'continuous': False,
                     'ids' : cache_contents                
                 }
+                self._repl_db.save_doc(repl_doc)
 
     def _check_already_running(self):
         if self.pidfile is not None and os.path.exists(self.pidfile):
