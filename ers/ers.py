@@ -135,14 +135,17 @@ class ERSReadOnly(object):
             view_range = {'key': [prop, value]}
 
         result = set([r['value'] for r in self.public_db.view('index/by_property_value', **view_range)])
+        result.update(set([r['value'] for r in self.cache_db.view('index/by_property_value', **view_range)]))
+        result.update(set([r['value'] for r in self.private_db.view('index/by_property_value', **view_range)]))
         for peer in self.get_peers():
-            try:
-                remote = ERSReadOnly(peer['server_url'], peer['dbname'], local_only=True)
-                remote_result = remote.search(prop, value)
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-                continue
-            result.update(remote_result)
+            for dbname in ('ers-public', 'ers-cache'):
+                try:
+                    remote = ERSReadOnly(peer['server_url'], dbname, local_only=True)
+                    remote_result = remote.search(prop, value)
+                except:
+                    sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                    continue
+                result.update(remote_result)
         return list(result)
 
     def exist(self, subject, graph):
