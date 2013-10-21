@@ -134,6 +134,7 @@ class ERSDaemon:
                 try:
                     server = couchdbkit.Server(server_url)
                     self._db = server.get_or_create_db(self.dbname)
+                    self._cache_db = server.get_or_create_db('ers-cache')
                     self._repl_db = server.get_db('_replicator')
                     break
                 except Exception as e:
@@ -148,6 +149,11 @@ class ERSDaemon:
             for doc in self._model.initial_docs():
                 if not self._db.doc_exist(doc['_id']):
                     self._db.save_doc(doc)
+
+            for doc in self._model.initial_docs_cache():
+                if not self._cache_db.doc_exist(doc['_id']):
+                    self._cache_db.save_doc(doc)
+
         except Exception as e:
             raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
 
@@ -199,6 +205,8 @@ class ERSDaemon:
 
         self._update_peers_in_couchdb()
         self._update_replication_links()
+
+        self._update_cache()
 
     def _on_leave(self, peer):
         if not peer.service_name in self._peers:
@@ -264,6 +272,22 @@ class ERSDaemon:
         search_view = { "map": 'function(doc) { if (doc._id.indexOf("ers-auto-") == 0) emit(doc._id, doc); }' }
 
         return [doc['value'] for doc in self._repl_db.temp_view(search_view)]
+
+    def _get_cache_contents(self):
+        return [doc_id for doc_id in self._cache_db.all_docs(wrapper=lambda r: r['id'])
+                            if not doc_id.startswith('_design/')]
+
+    def _update_cache(self):
+        cache_contents = self._get_cache_contents()
+        for peer in self._peers.values():
+            for dbname in ('ers-public', 'ers-cache'):
+                source_db = r'http://admin:admin@{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
+                repl_doc = {
+                    'target': 'ers-cache',
+                    'source': source_db,
+                    'continuous': False,
+                    'ids' : cache_contents                
+                }
 
     def _check_already_running(self):
         if self.pidfile is not None and os.path.exists(self.pidfile):
