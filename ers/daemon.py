@@ -286,7 +286,7 @@ class ERSDaemon:
                     'target': 'ers-cache',
                     'source': source_db,
                     'continuous': False,
-                    'ids' : cache_contents                
+                    'doc_ids' : cache_contents                
                 }
                 self._repl_db.save_doc(repl_doc)
 
