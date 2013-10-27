@@ -17,8 +17,7 @@ from utils import ERS_PEER_TYPE_BRIDGE
 from ers import DEFAULT_MODEL
 
 class ERSPeerInfo(zeroconf.ServicePeer):
-    """
-    This class contains information on an ERS peer.
+    """ This class contains information on an ERS peer.
     """
     dbname = None
     peer_type = None
@@ -32,6 +31,10 @@ class ERSPeerInfo(zeroconf.ServicePeer):
         return "ERS peer on {0.host}(={0.ip}):{0.port} (dbname={0.dbname}, type={0.peer_type})".format(self)
 
     def to_json(self):
+        """ Returns the ERS peer information from this instance in JSON format.
+        
+            :rtype: dict.
+        """
         return {
             'name': self.service_name,
             'host': self.host,
@@ -43,6 +46,12 @@ class ERSPeerInfo(zeroconf.ServicePeer):
 
     @staticmethod
     def from_service_peer(svc_peer):
+        """ Get an ERSPeerInfo instance from a given service peer.
+        
+            :param svc_peer: a service peer
+            :type svc_peer: ServicePeer instance
+            :rtype: ERSPeerInfo instance
+        """
         dbname = ERS_DEFAULT_DBNAME
         peer_type = ERS_DEFAULT_PEER_TYPE
 
@@ -62,6 +71,21 @@ class ERSPeerInfo(zeroconf.ServicePeer):
 
 
 class ERSDaemon:
+    """ The daemon class for the ERS daemon.
+    
+        :param peer_type: type of daemon instance
+        :type peer_type: 'contrib' or 'bridge'
+        :param port: TCP port number of CouchDB
+        :type port: int.
+        :param dbname: CouchDB database name
+        :type dbname: str.
+        :param pidfile: filepath to a PID file for this ERS daemon instance
+        :type pidfile: str.
+        :param tries: number of tries to connect to CouchDB
+        :type tries: int.
+        :param logger: logger for the daemon to use
+        :type logger: Logger instance
+    """
     peer_type = None
     port = None
     dbname = None
@@ -89,6 +113,8 @@ class ERSDaemon:
         self._peers = {}
 
     def start(self):
+        """ Starting up an ERS daemon.
+        """
         self.logger.info("Starting ERS daemon")
 
         self._check_already_running()
@@ -151,6 +177,8 @@ class ERSDaemon:
                 pass
 
     def stop(self):
+        """ Stopping an ERS daemon.
+        """
         if not self._active:
             return
 
@@ -253,6 +281,12 @@ LOG_LEVELS = ['debug', 'info', 'warning', 'error', 'critical']
 
 
 def setup_logging(args):
+    """ Setup a file or system logger.
+    
+        :param args: has a logtype attribute (which can be 'file' or 'syslog').
+        :type args: Object
+        :rtype: Logger instance
+    """
     logger = logging.getLogger('ers-daemon')
     logger.setLevel(10 + 10 * LOG_LEVELS.index(args.loglevel))
 
@@ -272,6 +306,8 @@ def setup_logging(args):
 
 
 def run():
+    """ Parse the given arguments for setting up the daemon and run it.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port", help="CouchDB port", type=int, default=5984)
     parser.add_argument("-d", "--dbname", help="CouchDB database name", type=str, default=ERS_DEFAULT_DBNAME)
