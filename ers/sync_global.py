@@ -43,8 +43,16 @@ OUTPUT_FILENAME = Template("/www-data/changes_$graph.log")
 
 
 class GraphSynch(Thread):
-    """ Creates a synch thread for a given graph using _changes feed """
-    def __init__(self, ERSReadWrite, name, graph): 
+    """ Synchronizes a peer's graph data with the global aggregator (creates a synch thread for a given graph using _changes feed).
+    
+        :param ERSReadWrite: ERSReadWrite to used for synchronization
+        :type ERSReadWrite: ERSReadWrite instance
+        :param name: thread name
+        :type name: str.
+        :param graph: graph to use for synchronization
+        :type graph: str.
+    """
+    def __init__(self, ERSReadWrite, name, graph):
         Thread.__init__(self)
         self.ers = ERSReadWrite
         self.name = name
@@ -54,9 +62,13 @@ class GraphSynch(Thread):
             self.ers.public_db.save_doc(self.filter_by_graph_doc())
         self.output_filename = OUTPUT_FILENAME.substitute(graph = self.graph)
         
-
-    """ Ask global server what was the last synchronized sequence number for this graph.  """
+        
     def get_previous_seq_num(self):
+        """ Ask global server what was the last synchronized sequence number for this graph.
+        
+            :returns: previous sequence number (-1 if server request didn't succeed)
+            :rtype: int.
+        """
         r = requests.get("http://"+GLOBAL_SERVER_HOST+":"+str(GLOBAL_SERVER_PORT)+GLOBAL_SERVER_HTTP_SEQ+
                             "?g=<"+self.graph+">")
         if r.status_code == 200:
@@ -67,8 +79,14 @@ class GraphSynch(Thread):
             print r.status_code, r.reason
             return -1
 
-    """ Update the global last synchronized sequence number for this graph """
     def set_new_seq_num(self, new_seq):
+        """ Update the global last synchronized sequence number for this graph.
+        
+            :param new_seq: new sequence number
+            :type new_seq: int.
+            :returns: success status
+            :rtype: bool.
+        """
         r = requests.post("http://"+GLOBAL_SERVER_HOST+":"+str(GLOBAL_SERVER_PORT)+GLOBAL_SERVER_HTTP_SEQ,
                             data={"g" : "<"+self.graph+">", "seq" : new_seq})
         if r.status_code == 200: 
@@ -77,9 +95,12 @@ class GraphSynch(Thread):
             print r.status_code, r.reason
             return False
         
-
-    """ Defines the filter document by graph. One DB stores multiple graphs. """
     def filter_by_graph_doc(self):
+        """ Defines the filter document by graph. One DB stores multiple graphs.
+        
+            :returns: a CouchDB filter design document
+            :rtype: JSON object
+        """
         return  {
             "_id": "_design/filter",
             "filters": {
@@ -88,7 +109,15 @@ class GraphSynch(Thread):
                }
 
 
-    def dump_changes_to_file(self, prev_seq, stream): 
+    def dump_changes_to_file(self, prev_seq, stream):
+        """ Save the changes made to a log file.
+        
+            :param prev_seq: sequence number of the previous successfully synchronized sequence from the global aggregator
+            :type prev_seq: int.
+            :param stream: stream of made changes
+            :type stream: ChangesStream instance
+            :returns: last synchronized sequence number
+        """
         if os.path.exists(self.output_filename): 
             os.remove(self.output_filename)
         o_file = open(self.output_filename, "w")
@@ -141,11 +170,15 @@ class GraphSynch(Thread):
         return last_seq_n
 
 
-    def set_finished(self): 
+    def set_finished(self):
+        """ Set the synchronization status to finished.
+        """
         self.finished = True
 
 
-    def run(self): 
+    def run(self):
+        """ Start the synchronization process
+        """
         while True: 
             if self.finished:
                 break
@@ -187,17 +220,39 @@ class GraphSynch(Thread):
             
 
 class SynchronizationManager(object):
+    """ Manages a synchronization process.
+    
+        :param ERSReadWrite: ERSReadWrite to used for synchronization
+        :type ERSReadWrite: ERSReadWrite instance
+    """
     def __init__(self, ERSReadWrite):
         self.active_repl = dict() 
         self.ers = ERSReadWrite
 
-    def get_thread_name(self, graph): 
+    def get_thread_name(self, graph):
+        """ Get the tread name of the synchronization process.
+        
+            :param graph: graph used for synchronization
+            :type graph: str.
+            :rtype: str.
+        """
         return 'synch_'+graph
 
-    def exists_synch_thread(self, graph): 
+    def exists_synch_thread(self, graph):
+        """ Check whether a synchronization process exists for the given graph.
+        
+            :param graph: graph to use for synchronization
+            :type graph: str.
+            :rtype: bool.
+        """
         return self.get_thread_name(graph) in self.active_repl
 
     def start_synch(self, graph):
+        """ Start the synchronization process.
+        
+            :param graph: graph to use for synchronization
+            :type graph: str.
+        """
         if self.exists_synch_thread(graph):
             print 'Another thread that synchronize graph ' + graph + ' already runs!'
         new_synch = GraphSynch(self.ers, self.get_thread_name(graph), graph)
@@ -213,6 +268,11 @@ class SynchronizationManager(object):
 	
        
     def stop_synch(self, graph):
+        """ Stop the synchronization process.
+        
+            :param graph: graph used for synchronization
+            :type graph: str.
+        """
         if self.get_thread_name(graph) in self.active_repl: 
             thread = self.active_repl[self.get_thread_name(graph)]
             if thread.isAlive(): 

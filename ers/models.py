@@ -5,18 +5,34 @@ class LocalModelBase(object):
     view_name = '_all_docs'
 
     def index_doc(self):
+        """ Get the default CouchDB index design document.
+        
+            :rtype: JSON object
+        """
         return {"_id": "_design/index"}
 
     def state_doc(self):
+        """ Get the default CouchDB state document.
+        
+            :rtype: JSON object
+        """
         return {
             "_id": "_local/state",
             "peers": {}
         }
 
     def cache_key(self, couch_key):
+        """ Get the default CouchDB cache key.
+        
+            :rtype: str.
+        """
         return couch_key
 
     def couch_key(self, cache_key, graph):
+        """ Get the default CouchDB key.
+        
+            :rtype: str.
+        """
         return cache_key
 
     def get_data(self, doc, subject, graph):
@@ -29,8 +45,9 @@ class LocalModelBase(object):
         pass
 
     def initial_docs(self):
-        """
-        TODO: delete
+        """ Get the default initial CouchDB documents (index design document and state document).
+        
+            :rtype: array
         """
         return [ self.index_doc(), self.state_doc() ]
 
@@ -49,7 +66,7 @@ class LocalModelBase(object):
 
 
 class ModelS(LocalModelBase):
-    """
+    """ The model class for document model type S.
 
     Example document:
 
@@ -69,6 +86,10 @@ class ModelS(LocalModelBase):
 
     @classmethod
     def index_doc(cls):
+        """ Get the CouchDB index design document (containing two views).
+        
+            :rtype: JSON object 
+        """
         return  {
             "_id": "_design/index",
             "views": {
@@ -93,36 +114,34 @@ class ModelS(LocalModelBase):
             }
         }
 
-    # def index_doc(cls):
-    #     return  {
-    #                 "_id": "_design/index",
-    #                 "views": {
-    #                     "by_entity": {
-    #                         "map": "function(doc) {var a = doc._id.split(' '); if (a.length == 2 && a[1].length > 0) {emit(a[1], {'rev': doc._rev, 'g': a[0]})}}"
-    #                     },
-    #                     "by_property_value": {
-    #                         "map": """function(doc) {
-    #                                     var a = doc._id.split(' '); 
-    #                                     if (a.length == 2 && a[1].length > 0) {
-    #                                       for (property in doc) {
-    #                                         if (property[0] != '_') {
-    #                                           doc[property].forEach(function(value) {emit([property, value], [a[1], a[0]])});
-    #                                         }
-    #                                       }
-    #                                     }
-    #                                   }
-    #                                 """
-    #                     }
-    #                 }
-    #             }
-
     def cache_key(self, couch_key):
+        """ Get the CouchDB cache key.
+        
+            :param couch_key: the CouchDB key
+            :type couch_key: str.
+            :rtype: str.
+        """
         return couch_key.split(' ')[1]
 
     def couch_key(self, cache_key, graph):
+        """ Get the CouchDB key.
+        
+            :param cache_key: the CouchDB cache key
+            :type cache_key: str.
+            :param graph: the RDF graph
+            :type graph: str.
+            :rtype: str.
+        """
         return "{0} {1}".format(graph, cache_key)
 
     def delete_property(self, couch_doc, prop, value):
+        """ Deletes a property from the given CouchDB document.
+            
+            :param couch_doc: the CouchDB document
+            :type couch_doc: CouchDB document object
+            :param prop: the property to delete
+            :type prop: str.
+        """
         if prop not in couch_doc:
             return
         
@@ -142,8 +161,15 @@ class ModelS(LocalModelBase):
     #     couch_doc.pop(prop, [])
 
     def get_data(self, doc, subject, graph):
-        """
-        Return property-value dictionary. Call with subject=None, graph=None to get data from a doc without an _id.
+        """ Get data from a CouchDB document given a subject and graph (call with subject=None and graph=None to get data from a document without an _id).
+        
+            :param doc: the CouchDB document from which to get data
+            :type doc: CouchDB document object
+            :param subject: the subject to get data for
+            :type subject: str.
+            :param graph: the graph to get data for
+            :type graph: str.
+            :rtype: property-value dictionary
         """
         data_dict = doc.copy()
         data_dict.pop('_rev', None)
@@ -157,6 +183,13 @@ class ModelS(LocalModelBase):
         return {}
 
     def add_data(self, couch_doc, cache):
+        """ Add cache data to a CouchDB document.
+            
+            :param couch_doc: the CouchDB document to add data to
+            :type couch_doc: CouchDB document object
+            :param cache: the cache data to add
+            :type cache: dict.
+        """
         cache_data = cache[self.cache_key(couch_doc['_id'])]
         for p, oo in cache_data.iteritems():
             couch_doc[p] = couch_doc.get(p, []) + list(oo)

@@ -6,26 +6,55 @@ import rdflib
 # Document model is used to store data in CouchDB. The API is independent from the choice of model.
 
 def import_nt(registry, file_name, target_graph):
-    """Import N-Triples file."""
+    """ Import N-Triples file.
+    
+        :param registry: registry used for writing the data
+        :type registry: ERSLocal instance
+        :param file_name: file name
+        :type file_name: str.
+        :param target_graph: graph to write to
+        :type target_graph: str.
+    """
     cache = EntityCache().parse_nt(filename=file_name)
     registry.write_cache(cache, target_graph)
 
 def import_nt_rdflib(registry, file_name, target_graph):
-    """Import N-Triples file using rdflib."""
+    """ Import N-Triples file using rdflib.
+    
+        :param registry: registry used for writing the data
+        :type registry: ERSLocal instance
+        :param file_name: file name
+        :type file_name: str.
+        :param target_graph: graph to write to
+        :type target_graph: str.
+    """
     # TODO: get rid of the intermediate cache?
     cache = EntityCache().parse_nt_rdflib(filename=file_name)
     registry.write_cache(cache, target_graph)
 
 class EntityCache(defaultdict):
-    """Equivalent to defaultdict(lambda: defaultdict(set))."""
+    """ Equivalent to defaultdict(lambda: defaultdict(set)).
+    """
     def __init__(self):
         super(EntityCache, self).__init__(lambda: defaultdict(set))
 
     def add(self, s, p, o):
-        """Add <s, p, o> to cache."""
+        """ Add <s, p, o> to cache.
+        
+            :param s: RDF subject
+            :type s: str.
+            :param p: RDF property
+            :type p: str.
+            :param o: RDF object
+            :type o: str.
+        """
         self[s][p].add(o)
 
     def parse_nt(self, **kwargs):
+        """ Parse N-Triples data.
+        
+            :returns: self
+        """
         if 'filename' in kwargs:
             lines = open(kwargs['filename'], 'r')
         elif 'data' in kwargs:
@@ -51,6 +80,10 @@ class EntityCache(defaultdict):
         return self
 
     def parse_nt_rdflib(self, **kwargs):
+        """ Parse N-Triples data using rdflib.
+        
+            :returns: self
+        """
         graph = rdflib.Graph()
 
         if 'filename' in kwargs:
