@@ -1,0 +1,8 @@
+*.pyc
+*.class
+
+build/
+couch/couchdata/*
+
+.DS_Store
+.idea/

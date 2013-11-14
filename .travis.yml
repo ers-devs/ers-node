@@ -1,0 +1,25 @@
+language: python
+
+services:
+    - couchdb
+
+python:
+    - 2.7
+#    - 2.6
+
+branches:
+  only:
+    - develop
+    - master
+
+before_install:
+
+install:
+    - pip install -r requirements.txt --use-mirrors
+    - python setup.py install
+    - cd ers-global; mvn package -Dmaven.test.skip=true -f pom_embedded.xml; cd ..
+
+before_script:
+    - curl -X PUT http://127.0.0.1:5984/_config/admins/admin -d '"admin"'
+
+script: python tests/test_ers.py
