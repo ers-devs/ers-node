@@ -8,8 +8,7 @@ TESTS_PATH = os.path.dirname(os.path.realpath(__file__))
 ERS_PATH = os.path.dirname(TESTS_PATH)
 sys.path.insert(0, ERS_PATH)
 
-import ers
-from ers import ERSLocal, ModelS
+from ers.ers import ERSLocal, ERSReadOnly, ModelS
 
 DEFAULT_MODEL = ModelS()
 
@@ -20,12 +19,18 @@ def test():
         assert ers.public_db.doc_exist('_design/index')
         assert ers.public_db.doc_exist('_local/state')
 
-        entity = ers.create_entity(s)
-        entity.add_property(p, v)
-        ers.persist_entity(entity)
+        def add_triple(subj, prop, val):
+            e = ers.create_entity(subj)
+            e.add_property(prop, val)
+            ers.persist_entity(e)
+            return e
+
+        add_triple(s, p, v)
+        add_triple(s2, p, v)
         assert ers.contains_entity(s) == True
         ers.delete_entity(s)
         assert ers.contains_entity(s) == False
+        assert ers.contains_entity(s2) == True
         # for o in objects:
         #     ers.add_data(s, p, o, g)
         #     ers.add_data(s, p2, o, g)
@@ -41,6 +46,7 @@ def test():
 
     # Test data
     s = entity = 'urn:ers:meta:testEntity'
+    s2 = 'urn:ers:meta:testEntity2'
     p = 'urn:ers:meta:predicates:hasValue'
     v = 'urn:ers:meta:testValue'
     p2 = 'urn:ers:meta:predicates:property'
@@ -56,6 +62,9 @@ def test():
     # Test local ers
     ers = ERSLocal(reset_database=True)
     test_ers()
+
+    ers = ERSReadOnly()
+    assert ers.contains_entity(s2) == True
 
     # # Prepare remote ers
     # ers_remote = ERSLocal(dbname='ers_remote')
