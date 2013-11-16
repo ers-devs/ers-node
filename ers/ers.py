@@ -10,6 +10,7 @@ import restkit
 from hashlib import md5
 from socket import gethostname
 
+from store import Store
 from models import ModelS
 from utils import EntityCache
 
