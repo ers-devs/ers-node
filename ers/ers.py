@@ -31,8 +31,6 @@ class ERSReadOnly(object):
     def __init__(self,
                  server_url=r'http://127.0.0.1:5984/',
                  auth = None,
-                 dbname='ers',
-                 model=DEFAULT_MODEL,
                  fixed_peers=(),
                  local_only=False):
         self._local_only = local_only
@@ -42,7 +40,7 @@ class ERSReadOnly(object):
         self.server = couchdbkit.Server(server_url, filters=[auth])
 
         self.store = Store()
-        self._init_model(model)
+        self._init_model(model=DEFAULT_MODEL)
         self._init_databases()
         self._init_host_urn()
 
@@ -270,8 +268,6 @@ class ERSLocal(ERSReadOnly):
     def __init__(self,
                  server_url=r'http://127.0.0.1:5984/',
                  auth=None,
-                 dbname='ers',
-                 model=DEFAULT_MODEL,
                  fixed_peers=(),
                  local_only=False,
                  reset_database=False):
@@ -286,7 +282,7 @@ class ERSLocal(ERSReadOnly):
         self._init_databases(reset_database)
 
         # Connect to the internal model used to store the triples
-        self._init_model(model)
+        self._init_model(model=DEFAULT_MODEL)
 
         self._init_host_urn()
 
