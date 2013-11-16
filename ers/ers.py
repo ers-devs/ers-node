@@ -1,9 +1,11 @@
 #!/usr/bin/python
 
-import couchdbkit
 import re
 import sys
 import uuid
+
+import couchdbkit
+import restkit
 
 from hashlib import md5
 from socket import gethostname
@@ -17,26 +19,29 @@ SERVER_TIMEOUT = 300
 class ERSReadOnly(object):
     """ The read-only class for an ERS peer.
     
-        :param server_url: peer's server URL
-        :type server_url: str.
-        :param dbname: CouchDB database name
-        :type dbname: str.
-        :param model: document model
-        :type model: LocalModelBase instance
+        :param server_url: CouchDB server URL
+        :type server_url: str
+        :param auth: authentication filter used to connect to CouchDB
+        :type restkit.BasicAuth
         :param fixed_peers: known peers
         :type fixed_peers: tuple
         :param local_only: whether or not the peer is local-only
         :type local_only: bool.
     """
     def __init__(self,
-                 server_url=r'http://admin:admin@127.0.0.1:5984/',
+                 server_url=r'http://127.0.0.1:5984/',
+                 auth = None,
                  dbname='ers',
                  model=DEFAULT_MODEL,
                  fixed_peers=(),
                  local_only=False):
         self._local_only = local_only
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
-        self.server = couchdbkit.Server(server_url)
+
+        # Connect to CouchDB
+        self.server = couchdbkit.Server(server_url, filters=[auth])
+
+        self.store = Store()
         self._init_model(model)
         self._init_databases()
         self._init_host_urn()
@@ -251,21 +256,20 @@ class ERSReadOnly(object):
 class ERSLocal(ERSReadOnly):
     """ The read-write local class for an ERS peer.
     
-        :param server_url: peer's server URL
-        :type server_url: str.
-        :param dbname: CouchDB database name
-        :type dbname: str.
-        :param model: document model
-        :type model: LocalModelBase instance
+        :param server_url: CouchDB server URL
+        :type server_url: str
+        :param auth: authentication filter used to connect to CouchDB
+        :type restkit.BasicAuth
         :param fixed_peers: known peers
         :type fixed_peers: tuple
-        :param local_only: whether or not the peer is local-only
-        :type local_only: bool.
+        :param local_only: if True ERS will not attempt to connect to remote peers
+        :type local_only: bool
         :param reset_database: whether or not to reset the CouchDB database on the given server
-        :type reset_databasae: bool.
+        :type reset_databasae: bool
     """
     def __init__(self,
-                 server_url=r'http://admin:admin@127.0.0.1:5984/',
+                 server_url=r'http://127.0.0.1:5984/',
+                 auth=None,
                  dbname='ers',
                  model=DEFAULT_MODEL,
                  fixed_peers=(),
@@ -275,7 +279,8 @@ class ERSLocal(ERSReadOnly):
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
 
         # Connect to CouchDB
-        self.server = couchdbkit.Server(server_url)
+        auth = auth or restkit.BasicAuth('admin', 'admin')
+        self.server = couchdbkit.Server(server_url, filters=[auth])
 
         # Connect databases
         self._init_databases(reset_database)
