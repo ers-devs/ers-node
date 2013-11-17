@@ -16,8 +16,8 @@ def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
 
     def test_ers():
-        assert ers.public_db.doc_exist('_design/index')
-        assert ers.public_db.doc_exist('_local/state')
+        assert ers.store.public.doc_exist('_design/index')
+        assert ers.store.public.doc_exist('_local/state')
 
         def add_triple(subj, prop, val):
             e = ers.create_entity(subj)

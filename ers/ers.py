@@ -10,12 +10,11 @@ import restkit
 from hashlib import md5
 from socket import gethostname
 
-from store import Store
+from store import LocalStore, reset_local_store
 from models import ModelS
 from utils import EntityCache
 
 DEFAULT_MODEL = ModelS()
-SERVER_TIMEOUT = 300
 
 class ERSReadOnly(object):
     """ The read-only class for an ERS peer.
@@ -30,29 +29,12 @@ class ERSReadOnly(object):
         :type local_only: bool.
     """
     def __init__(self,
-                 server_url=r'http://127.0.0.1:5984/',
-                 auth = None,
                  fixed_peers=(),
                  local_only=False):
         self._local_only = local_only
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
-
-        # Connect to CouchDB
-        self.server = couchdbkit.Server(server_url, filters=[auth])
-
-        self.store = Store()
-        self._init_model(model=DEFAULT_MODEL)
-        self._init_databases()
+        self.store = LocalStore()
         self._init_host_urn()
-
-    def _init_databases(self):
-        self.public_db = self.server.get_db('ers-public')
-        self.private_db = self.server.get_db('ers-private')
-        self.cache_db = self.server.get_db('ers-cache')
-
-    def _init_model(self, model):
-        """Connect to model."""
-        self.model = model
 
     def _init_host_urn(self):
         fingerprint = md5(gethostname()).hexdigest()
@@ -63,26 +45,6 @@ class ERSReadOnly(object):
                         wrapper = lambda r: r['doc'],
                         key=entity_name,
                         include_docs=True)
-
-    def get_annotation(self, entity):
-        """ Get data from self and known peers for a given subject.
-        
-            :param entity: subject to get data for
-            :type entity: str.
-            :rtype: dict.
-        """
-        result = self.get_data(entity)
-
-        for peer in self.get_peers():
-            try:
-                remote = ERSReadOnly(peer['server_url'], peer['dbname'], local_only=True)
-                remote_result = remote.get_data(entity)
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-                continue
-            self._merge_annotations(result, remote_result)
-
-        return result
 
     def get_data(self, subject, graph=None):
         """ Get all property + value pairs for a given subject and graph.
@@ -95,7 +57,7 @@ class ERSReadOnly(object):
         """
         result = {}
         if graph is None:
-            docs = [d['doc'] for d in self.public_db.view('index/by_entity', include_docs=True, key=subject)]
+            docs = [d['doc'] for d in self.store.public.view('index/by_entity', include_docs=True, key=subject)]
         else:
             docs = [self.get_doc(subject, graph)]
         for doc in docs:
@@ -112,7 +74,7 @@ class ERSReadOnly(object):
             :rtype: array
         """
         try:
-            return self.public_db.get(self.model.couch_key(subject, graph))
+            return self.store.public.get(self.model.couch_key(subject, graph))
         except couchdbkit.exceptions.ResourceNotFound: 
             return None
 
@@ -124,35 +86,24 @@ class ERSReadOnly(object):
         # Create the entity
         entity = Entity(entity_name)
         
-        # Search for related documents in public
-        public_docs = self._get_docs_by_entity(self.public_db, entity_name)
-        for doc in public_docs:
-            entity.add_document(doc, 'public')
-
-        # Do the same in the cache
-        cached_docs = self._get_docs_by_entity(self.cache_db, entity_name)
-        for doc in cached_docs:
-            entity.add_document(doc, 'cache')
+        # Add matching documents from the local store
+        for source, db_name in self.store.db_names.iteritems():
+            docs = self.store[db_name].docs_by_entity(entity_name)
+            for doc in docs:
+                entity.add_document(doc, source)
          
         # Get documents out of public/cache of connected peers
         for peer in self.get_peers():
+            remote_docs = []
             try:
-                remote_server = couchdbkit.Server(  peer['server_url'],
-                                                    timeout = SERVER_TIMEOUT)
+                remote_store = RemoteStore(peer['server_url'])
+                remote_docs.extend(remote_store.docs_by_entity(entity_name))
             except:
                 sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
                 continue
-
-            for dbname in ('ers-public', 'ers-cache'):
-                remote_docs = []
-                try:
-                    remote_docs = self._get_docs_by_entity(
-                        remote_server[dbname], entity_name)
-                except:
-                    sys.stderr.write("Warning: failed to query {1} on remote peer {0}".format(peer, dbname))
-                else:
-                    for doc in remote_docs:
-                        entity.add_document(doc, 'remote')
+            else:
+                for doc in remote_docs:
+                    entity.add_document(doc, 'remote')
         return entity
     
 
@@ -182,9 +133,9 @@ class ERSReadOnly(object):
         else:
             view_range = {'key': [prop, value]}
 
-        result = set([r['value'] for r in self.public_db.view('index/by_property_value', **view_range)])
-        result.update(set([r['value'] for r in self.cache_db.view('index/by_property_value', **view_range)]))
-        result.update(set([r['value'] for r in self.private_db.view('index/by_property_value', **view_range)]))
+        result = set([r['value'] for r in self.store.public.view('index/by_property_value', **view_range)])
+        result.update(set([r['value'] for r in self.store.cache.view('index/by_property_value', **view_range)]))
+        result.update(set([r['value'] for r in self.store.private.view('index/by_property_value', **view_range)]))
         for peer in self.get_peers():
             for dbname in ('ers-public', 'ers-cache'):
                 try:
@@ -205,7 +156,7 @@ class ERSReadOnly(object):
             :type graph: str.
             :rtype: bool.
         """
-        return self.public_db.doc_exist(self.model.couch_key(subject, graph))
+        return self.store.public.doc_exist(self.model.couch_key(subject, graph))
 
     def get_peers(self):
         """ Get the known peers.
@@ -226,7 +177,7 @@ class ERSReadOnly(object):
             dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
 
             result.append({'server_url': server_url, 'dbname': dbname})
-        state_doc = self.public_db.open_doc('_local/state')
+        state_doc = self.store.public.open_doc('_local/state')
         for peer in state_doc['peers']:
             result.append({
                 'server_url': r'http://admin:admin@' + peer['ip'] + ':' + str(peer['port']) + '/',
@@ -239,8 +190,8 @@ class ERSReadOnly(object):
         Search in the public DB is there is already a document for describing that entity
         '''
         # TODO Use an index
-        for doc in self.public_db.all_docs().all():
-            document = self.public_db.get(doc['id'])
+        for doc in self.store.public.all_docs().all():
+            document = self.store.public.get(doc['id'])
             if '@id' in document and document['@id'] == entity_name:
                 return True
         return False
@@ -263,72 +214,18 @@ class ERSLocal(ERSReadOnly):
         :type fixed_peers: tuple
         :param local_only: if True ERS will not attempt to connect to remote peers
         :type local_only: bool
-        :param reset_database: whether or not to reset the CouchDB database on the given server
-        :type reset_databasae: bool
+        :param reset_store: whether or not to reset the CouchDB database on the given server
+        :type reset_database: bool
     """
     def __init__(self,
-                 server_url=r'http://127.0.0.1:5984/',
-                 auth=None,
                  fixed_peers=(),
                  local_only=False,
                  reset_database=False):
-        self._local_only = local_only
-        self.fixed_peers = [] if self._local_only else list(fixed_peers)
-
-        # Connect to CouchDB
-        auth = auth or restkit.BasicAuth('admin', 'admin')
-        self.server = couchdbkit.Server(server_url, filters=[auth])
-
-        # Connect databases
-        self._init_databases(reset_database)
-
-        # Connect to the internal model used to store the triples
-        self._init_model(model=DEFAULT_MODEL)
-
-        self._init_host_urn()
-
-    def _init_databases(self, reset_database):
         if reset_database:
-            try:
-                self.server.delete_db('ers-public')
-                self.server.delete_db('ers-private')
-                self.server.delete_db('ers-cache')
-            except couchdbkit.ResourceNotFound:
-                pass
-        self.public_db = self.server.get_or_create_db('ers-public')
-        self.private_db = self.server.get_or_create_db('ers-private')
-        self.cache_db = self.server.get_or_create_db('ers-cache')
+            reset_local_store()
+        super(ERSLocal, self).__init__(fixed_peers, local_only)
 
-    def _init_model(self, model):
-        """Connect to model and create required docs."""
-        self.model = model
-        for doc in self.model.initial_docs_public():
-            if not self.public_db.doc_exist(doc['_id']):
-                self.public_db.save_doc(doc)
-        for doc in self.model.initial_docs_cache():
-            if not self.cache_db.doc_exist(doc['_id']):
-                self.cache_db.save_doc(doc)
-        for doc in self.model.initial_docs_private():
-            if not self.private_db.doc_exist(doc['_id']):
-                self.private_db.save_doc(doc)
-
-    def add_data(self, s, p, o, g):
-        """ Add a value for a property in an entity in the given graph (create the entity if it does not exist yet).
-        
-            :param s: RDF subject
-            :type s: str.
-            :param p: RDF property
-            :type p: str.
-            :param o: RDF object
-            :type o: str.
-            :param g: RDF graph
-            :type g: str.
-        """
-        triples = EntityCache()
-        triples.add(s, p, o)
-        self.write_cache(triples, g)
-
-    def delete_entity(self, entity, graph=None):
+    def delete_entity(self, entity):
         """ Delete an entity from the given graph.
         
             :param entity: entity to delete
@@ -338,17 +235,11 @@ class ERSLocal(ERSReadOnly):
             :returns: success status
             :rtype: bool.
         """
-        # Assumes there is only one entity per doc.
-        if graph is None:
-            docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                    for r in self.public_db.view('index/by_entity', key=entity)]
-        else:
-            docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                    for r in self.public_db.view('index/by_entity', key=entity)
-                    if r['value']['g'] == graph]
-        return self.public_db.save_docs(docs)
+        docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
+                for r in self.store.public.view('index/by_entity', key=entity)]
+        return self.store.public.save_docs(docs)
 
-    def delete_value(self, entity, prop, graph=None):
+    def delete_value(self, entity, prop):
         """ Delete all of the peer's values for a property in an entity from the given graph.
         
             :param entity: entity to delete for
@@ -360,14 +251,11 @@ class ERSLocal(ERSReadOnly):
             :returns: success status
             :rtype: bool.
         """
-        if graph is None:
-            docs = [r['doc'] for r in self.public_db.view('index/by_entity', key=entity, include_docs=True)]
-        else:
-            docs = [r['doc'] for r in self.public_db.view('index/by_entity', key=entity, include_docs=True)
-                             if r['value']['g'] == graph]
+        docs = [r['doc'] for r in self.store.public.view('index/by_entity',
+            key=entity, include_docs=True)]
         for doc in docs:
             self.model.delete_property(doc, prop)
-        return self.public_db.save_docs(docs)        
+        return self.store.public.save_docs(docs)        
 
     def write_cache(self, cache, graph):
         """ Write cache to the given graph.
@@ -379,13 +267,13 @@ class ERSLocal(ERSReadOnly):
         """
         docs = []
         # TODO: check if sorting keys makes it faster
-        couch_docs = self.public_db.view(self.model.view_name, include_docs=True,
+        couch_docs = self.store.public.view(self.model.view_name, include_docs=True,
                                   keys=[self.model.couch_key(k, graph) for k in cache])
         for doc in couch_docs:
             couch_doc = doc.get('doc', {'_id': doc['key']})
             self.model.add_data(couch_doc, cache)
             docs.append(couch_doc)
-        self.public_db.save_docs(docs)
+        self.store.public.save_docs(docs)
 
     def update_value(self, subject, object, graph=None):
         """ Update a value for an identifier + property pair (create it if it does not exist yet).
@@ -409,7 +297,7 @@ class ERSLocal(ERSReadOnly):
                         '@id' : entity_name,
                         '@owner' : self.host_urn
                     }
-        self.public_db.save_doc(document)
+        self.store.public.save_doc(document)
         
         # Create the entity
         entity = Entity(entity_name)
@@ -424,13 +312,13 @@ class ERSLocal(ERSReadOnly):
         '''
         for doc in entity.get_documents():
             if doc['source'] == 'public':
-                self.public_db.save_doc(doc['document'])
+                self.store.public.save_doc(doc['document'])
 
     def is_cached(self, entity_name):
         '''
         Check if an entity is listed as being cached
         '''
-        entity_names_doc = self.cache_db.open_doc('_local/content')
+        entity_names_doc = self.store.cache.open_doc('_local/content')
         return entity_name in entity_names_doc['entity_name']
 
     def cache_entity(self, entity):
@@ -446,13 +334,13 @@ class ERSLocal(ERSReadOnly):
             return
         
         # Add the entity to the list
-        entity_names_doc = self.cache_db.open_doc('_local/content')
+        entity_names_doc = self.store.cache.open_doc('_local/content')
         entity_names_doc['entity_name'].append(entity.get_name())
-        self.cache_db.save_doc(entity_names_doc)
+        self.store.cache.save_doc(entity_names_doc)
         
         # Save all its current documents in the cache
         for doc in entity.get_raw_documents():
-            self.cache_db.save_doc(doc)
+            self.store.cache.save_doc(doc)
     
     def get_machine_uuid(self):
         '''
