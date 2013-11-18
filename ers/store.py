@@ -55,14 +55,35 @@ class ERSDatabase(couchdbkit.Database):
                         wrapper = lambda r: r['doc'],
                         key=entity_name,
                         include_docs=True)
-        
+
+    def by_entity(self, entity_name):
+        return self.view('index/by_entity',
+                        key=entity_name)
+
+    def entity_exist(self, entity_name):
+        return self.view('index/by_entity', key=entity_name).first() is not None
+
+    def by_property(self, prop):
+        return self.view('index/by_property_value',
+                        startkey=[prop],
+                        endkey=[prop, {}],
+                        wrapper = lambda r: r['value'])
+
+    def by_property_value(self, prop, value=None):
+        if value is None:
+            return self.by_property(prop)
+        return self.view('index/by_property_value',
+                        key=[prop, value],
+                        wrapper = lambda r: r['value'])        
+
 
 class Store(couchdbkit.Server):
     """ERS store"""
     def __init__(self, uri, databases, **client_opts):
         self.db_names = dict([(db, db_name(db)) for db in databases])
         super(Store, self).__init__(uri, **client_opts)
-        self.add_aggregate('docs_by_entity')
+        for method_name in ('docs_by_entity', 'by_property', 'by_property_value'):
+            self.add_aggregate(method_name)
 
     def __getattr__(self, attr):
         if attr in self.db_names:
@@ -79,22 +100,14 @@ class Store(couchdbkit.Server):
 
     @classmethod
     def add_aggregate(cls, method_name):
+        """
+        """
         def aggregate(self, *args, **kwargs):
             return chain(*(getattr(self[db_name], method_name)(*args, **kwargs).iterator()
                             for db_name in self.all_dbs()))
         aggregate.__doc__ = """Calls method {}() of all databases in the store and returns an iterator over combined results""".format(method_name)
         aggregate.__name__ = method_name
         setattr(cls, method_name, aggregate)
-
-    def _create_aggregate_method(self, method_name):
-        """
-        Call method ERSDatabase.method_name for all dbs in the store
-        Return chained results.
-        """
-        methods = [getattr(self[db_name], method_name) for db_name in self.all_dbs()]
-        def new_method(self=self, *args, **kwargs):
-            return chain(m(*args, **kwargs) for m in methods)
-        setattr(self, method_name, new_method)
  
     def get_db(self, dbname, **params): 
         """ 
@@ -125,6 +138,4 @@ def reset_local_store(auth=DEFAULT_AUTH):
 
     # Create state doc in the public database
     store.public.save_doc(state_doc())
-
-
 

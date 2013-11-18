@@ -40,44 +40,6 @@ class ERSReadOnly(object):
         fingerprint = md5(gethostname()).hexdigest()
         self.host_urn = "urn:ers:host:{}".format(fingerprint)
 
-    def _get_docs_by_entity(self, db, entity_name):
-        return db.view('index/by_entity',
-                        wrapper = lambda r: r['doc'],
-                        key=entity_name,
-                        include_docs=True)
-
-    def get_data(self, subject, graph=None):
-        """ Get all property + value pairs for a given subject and graph.
-            
-            :param subject: subject to get data for
-            :type subject: str.
-            :param graph: graph to get data for
-            :type graph: str.
-            :rtype: property-value dictionary
-        """
-        result = {}
-        if graph is None:
-            docs = [d['doc'] for d in self.store.public.view('index/by_entity', include_docs=True, key=subject)]
-        else:
-            docs = [self.get_doc(subject, graph)]
-        for doc in docs:
-            self._merge_annotations(result, self.model.get_data(doc, subject, graph))
-        return result
-
-    def get_doc(self, subject, graph):
-        """ Get the documents for a given subject and graph.
-            
-            :param subject: subject to get data for
-            :type subject: str.
-            :param graph: graph to get data for
-            :type graph: str.
-            :rtype: array
-        """
-        try:
-            return self.store.public.get(self.model.couch_key(subject, graph))
-        except couchdbkit.exceptions.ResourceNotFound: 
-            return None
-
     def get_entity(self, entity_name):
         '''
         Create an entity object, fill it will all the relevant documents
@@ -105,19 +67,6 @@ class ERSReadOnly(object):
                 for doc in remote_docs:
                     entity.add_document(doc, 'remote')
         return entity
-    
-
-    def get_values(self, entity, prop):
-        """ Get the value for an identifier + property pair (return null or a special value if it does not exist).
-            
-            :param entity: entity to get data for
-            :type entity: str.
-            :param prop: property to get data for
-            :type prop: str.
-            :returns: list of values or an empty list
-        """
-        entity_data = self.get_annotation(entity)
-        return entity_data.get(prop, [])
 
     def search(self, prop, value=None):
         """ Search entities by property or property + value pair.
@@ -128,19 +77,13 @@ class ERSReadOnly(object):
             :type value: str.
             :returns: list of unique (entity, graph) pairs
         """
-        if value is None:
-            view_range = {'startkey': [prop], 'endkey': [prop, {}]}
-        else:
-            view_range = {'key': [prop, value]}
-
-        result = set([r['value'] for r in self.store.public.view('index/by_property_value', **view_range)])
-        result.update(set([r['value'] for r in self.store.cache.view('index/by_property_value', **view_range)]))
-        result.update(set([r['value'] for r in self.store.private.view('index/by_property_value', **view_range)]))
+        result = set(self.store.by_property_value(prop, value))
         for peer in self.get_peers():
             for dbname in ('ers-public', 'ers-cache'):
+                remote_result = []
                 try:
-                    remote = ERSReadOnly(peer['server_url'], dbname, local_only=True)
-                    remote_result = remote.search(prop, value)
+                    remote_store = RemoteStore(peer['server_url'])
+                    remote_result = set(remote_store.by_property_value(prop, value))
                 except:
                     sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
                     continue
@@ -196,13 +139,6 @@ class ERSReadOnly(object):
                 return True
         return False
         
-    def _merge_annotations(self, a, b):
-        for key, values in b.iteritems():
-            unique_values = set(values)
-            unique_values.update(a.get(key,[]))
-            a[key] = list(unique_values)
-
-
 class ERSLocal(ERSReadOnly):
     """ The read-write local class for an ERS peer.
     
@@ -257,37 +193,6 @@ class ERSLocal(ERSReadOnly):
             self.model.delete_property(doc, prop)
         return self.store.public.save_docs(docs)        
 
-    def write_cache(self, cache, graph):
-        """ Write cache to the given graph.
-        
-            :param cache: cache to write
-            :type cache: array
-            :param graph: graph to write to
-            :type graph: str.
-        """
-        docs = []
-        # TODO: check if sorting keys makes it faster
-        couch_docs = self.store.public.view(self.model.view_name, include_docs=True,
-                                  keys=[self.model.couch_key(k, graph) for k in cache])
-        for doc in couch_docs:
-            couch_doc = doc.get('doc', {'_id': doc['key']})
-            self.model.add_data(couch_doc, cache)
-            docs.append(couch_doc)
-        self.store.public.save_docs(docs)
-
-    def update_value(self, subject, object, graph=None):
-        """ Update a value for an identifier + property pair (create it if it does not exist yet).
-            [Not yet implemented]
-        
-            :param subject: subject to update for
-            :type subject: str.
-            :param object: object to update
-            :type object: str.
-            :param graph: graph to use for updating
-            :type graph: str.
-        """
-        raise NotImplementedError
-
     def create_entity(self, entity_name):
         '''
         Create a new entity, return it and store in as a new document in the public store
@@ -316,10 +221,9 @@ class ERSLocal(ERSReadOnly):
 
     def is_cached(self, entity_name):
         '''
-        Check if an entity is listed as being cached
+        Check if an entity exists in the cache
         '''
-        entity_names_doc = self.store.cache.open_doc('_local/content')
-        return entity_name in entity_names_doc['entity_name']
+        return self.store.cache.entity_exist(entity_name)
 
     def cache_entity(self, entity):
         '''
@@ -332,11 +236,6 @@ class ERSLocal(ERSReadOnly):
         # No point in caching it again
         if self.is_cached(entity.get_name()):
             return
-        
-        # Add the entity to the list
-        entity_names_doc = self.store.cache.open_doc('_local/content')
-        entity_names_doc['entity_name'].append(entity.get_name())
-        self.store.cache.save_doc(entity_names_doc)
         
         # Save all its current documents in the cache
         for doc in entity.get_raw_documents():

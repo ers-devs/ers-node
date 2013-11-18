@@ -31,6 +31,10 @@ def test():
         ers.delete_entity(s)
         assert ers.contains_entity(s) == False
         assert ers.contains_entity(s2) == True
+        assert ers.is_cached(s2) == False
+        e = ers.get_entity(s2)
+        ers.cache_entity(e)
+        assert ers.is_cached(s2) == True
         # for o in objects:
         #     ers.add_data(s, p, o, g)
         #     ers.add_data(s, p2, o, g)
