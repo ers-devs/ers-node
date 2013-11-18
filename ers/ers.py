@@ -4,27 +4,18 @@ import re
 import sys
 import uuid
 
-import couchdbkit
-import restkit
-
 from hashlib import md5
 from socket import gethostname
 
-from store import LocalStore, reset_local_store
-from models import ModelS
-from utils import EntityCache
-
-DEFAULT_MODEL = ModelS()
+import store
 
 class ERSReadOnly(object):
     """ The read-only class for an ERS peer.
     
         :param server_url: CouchDB server URL
         :type server_url: str
-        :param auth: authentication filter used to connect to CouchDB
-        :type restkit.BasicAuth
-        :param fixed_peers: known peers
-        :type fixed_peers: tuple
+        :param fixed_peers: URL's of known peers
+        :type fixed_peers: list
         :param local_only: whether or not the peer is local-only
         :type local_only: bool.
     """
@@ -33,12 +24,18 @@ class ERSReadOnly(object):
                  local_only=False):
         self._local_only = local_only
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
-        self.store = LocalStore()
+        self.store = store.LocalStore()
         self._init_host_urn()
 
     def _init_host_urn(self):
         fingerprint = md5(gethostname()).hexdigest()
         self.host_urn = "urn:ers:host:{}".format(fingerprint)
+
+    def get_machine_uuid(self):
+        '''
+        @return a unique identifier for this ERS node
+        '''
+        return str(uuid.getnode())
 
     def get_entity(self, entity_name):
         '''
@@ -58,7 +55,7 @@ class ERSReadOnly(object):
         for peer in self.get_peers():
             remote_docs = []
             try:
-                remote_store = RemoteStore(peer['server_url'])
+                remote_store = store.RemoteStore(peer['server_url'])
                 remote_docs.extend(remote_store.docs_by_entity(entity_name))
             except:
                 sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
@@ -77,75 +74,67 @@ class ERSReadOnly(object):
             :type value: str.
             :returns: list of unique (entity, graph) pairs
         """
+        # Search in the local store
         result = set(self.store.by_property_value(prop, value))
+
+        # Search peers
         for peer in self.get_peers():
-            for dbname in ('ers-public', 'ers-cache'):
-                remote_result = []
-                try:
-                    remote_store = RemoteStore(peer['server_url'])
-                    remote_result = set(remote_store.by_property_value(prop, value))
-                except:
-                    sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
-                    continue
+            remote_result = []
+            try:
+                remote_store = store.RemoteStore(peer['server_url'])
+                remote_result = set(remote_store.by_property_value(prop, value))
+            except:
+                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+            else:
                 result.update(remote_result)
+
         return list(result)
 
-    def exist(self, subject, graph):
-        """ Check whether a subject exists in a given graph.
+    def entity_exist(self, entity_name):
+        """ Check whether an entity exists in the local store.
 
-            :param subject: subject to check for
-            :type subject: str.
-            :param graph: graph to use for checking
-            :type graph: str.
-            :rtype: bool.
+            :param entity_name
+            :type subject: str
+            :rtype: bool
         """
-        return self.store.public.doc_exist(self.model.couch_key(subject, graph))
+        return any([getattr(self.store, db).exist(entity_name)
+            for db in self.store.db_names])
 
     def get_peers(self):
         """ Get the known peers.
         
             :rtype: array 
         """
-        result = []
         if self._local_only:
-            return result
-        for peer_info in self.fixed_peers:
-            if 'url' in peer_info:
-                server_url = peer_info['url']
-            elif 'host' in peer_info and 'port' in peer_info:
-                server_url = r'http://admin:admin@' + peer_info['host'] + ':' + str(peer_info['port']) + '/'
-            else:
-                raise RuntimeError("Must include either 'url' or 'host' and 'port' in fixed peer specification")
+            return []
 
-            dbname = peer_info['dbname'] if 'dbname' in peer_info else 'ers'
+        result = [{'server_url': server_url} for server_url in self.fixed_peers] 
 
-            result.append({'server_url': server_url, 'dbname': dbname})
         state_doc = self.store.public.open_doc('_local/state')
         for peer in state_doc['peers']:
             result.append({
-                'server_url': r'http://admin:admin@' + peer['ip'] + ':' + str(peer['port']) + '/',
-                'dbname': peer['dbname']
+                'server_url': r'http://' + peer['ip'] + ':' + str(peer['port']) + '/',
             })
         return result
 
+    def is_cached(self, entity_name):
+        '''
+        Check if an entity exists in the cache
+        '''
+        return self.store.cache.entity_exist(entity_name)
+
     def contains_entity(self, entity_name):
-        '''
-        Search in the public DB is there is already a document for describing that entity
-        '''
-        # TODO Use an index
-        for doc in self.store.public.all_docs().all():
-            document = self.store.public.get(doc['id'])
-            if '@id' in document and document['@id'] == entity_name:
-                return True
-        return False
+        """
+        Check if the entity exists in the public store
+        """
+        # QUESTION Other dbs?
+        return self.store.public.entity_exist(entity_name)
         
 class ERSLocal(ERSReadOnly):
     """ The read-write local class for an ERS peer.
     
         :param server_url: CouchDB server URL
         :type server_url: str
-        :param auth: authentication filter used to connect to CouchDB
-        :type restkit.BasicAuth
         :param fixed_peers: known peers
         :type fixed_peers: tuple
         :param local_only: if True ERS will not attempt to connect to remote peers
@@ -158,11 +147,11 @@ class ERSLocal(ERSReadOnly):
                  local_only=False,
                  reset_database=False):
         if reset_database:
-            reset_local_store()
+            store.reset_local_store()
         super(ERSLocal, self).__init__(fixed_peers, local_only)
 
-    def delete_entity(self, entity):
-        """ Delete an entity from the given graph.
+    def delete_entity(self, entity_name):
+        """ Delete an entity from the public store.
         
             :param entity: entity to delete
             :type entity: str.
@@ -172,26 +161,27 @@ class ERSLocal(ERSReadOnly):
             :rtype: bool.
         """
         docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                for r in self.store.public.view('index/by_entity', key=entity)]
+                for r in self.store.public.by_entity(entity_name)]
         return self.store.public.save_docs(docs)
 
-    def delete_value(self, entity, prop):
-        """ Delete all of the peer's values for a property in an entity from the given graph.
+    ## Never used so far
+    # def delete_value(self, entity, prop):
+    #     """ Delete all of the peer's values for a property in an entity.
         
-            :param entity: entity to delete for
-            :type entity: str.
-            :param prop: property to delete for
-            :type prop: str.
-            :param graph: graph to delete from
-            :type graph: str.
-            :returns: success status
-            :rtype: bool.
-        """
-        docs = [r['doc'] for r in self.store.public.view('index/by_entity',
-            key=entity, include_docs=True)]
-        for doc in docs:
-            self.model.delete_property(doc, prop)
-        return self.store.public.save_docs(docs)        
+    #         :param entity: entity to delete for
+    #         :type entity: str.
+    #         :param prop: property to delete for
+    #         :type prop: str.
+    #         :param graph: graph to delete from
+    #         :type graph: str.
+    #         :returns: success status
+    #         :rtype: bool.
+    #     """
+    #     docs = [r['doc'] for r in self.store.public.view('index/by_entity',
+    #         key=entity, include_docs=True)]
+    #     for doc in docs:
+    #         self.model.delete_property(doc, prop)
+    #     return self.store.public.save_docs(docs)        
 
     def create_entity(self, entity_name):
         '''
@@ -219,12 +209,6 @@ class ERSLocal(ERSReadOnly):
             if doc['source'] == 'public':
                 self.store.public.save_doc(doc['document'])
 
-    def is_cached(self, entity_name):
-        '''
-        Check if an entity exists in the cache
-        '''
-        return self.store.cache.entity_exist(entity_name)
-
     def cache_entity(self, entity):
         '''
         Place an entity in the cache. This mark the entity as being
@@ -240,12 +224,6 @@ class ERSLocal(ERSReadOnly):
         # Save all its current documents in the cache
         for doc in entity.get_raw_documents():
             self.store.cache.save_doc(doc)
-    
-    def get_machine_uuid(self):
-        '''
-        @return a unique identifier for this ERS node
-        '''
-        return str(uuid.getnode())
 
 
 class Entity():
@@ -259,16 +237,13 @@ class Entity():
         # Create an empty list of documents
         self._documents = []
         
-        # Get an instance of the serialisation model
-        self._model = DEFAULT_MODEL
-        
     def add_document(self, document, source):
         '''
         Add a document to the list of documents that compose this entity
         '''
         self._documents.append({'document': document, 'source': source})
             
-    def add_property(self, property, value):
+    def add_property(self, prop, value):
         '''
         Add a property to the description of the entity
         TODO: we can only edit the local or private documents
@@ -279,9 +254,11 @@ class Entity():
                 document = doc['document']
         if document == None:
             return
-        self._model.add_property(document, property, value)
+        if prop not in document:
+            document[prop] = []
+        document[prop].append(value)
     
-    def delete_property(self, property, value):
+    def delete_property(self, prop, value):
         '''
         Delete a property to the description of the entity
         TODO: we can only edit the local or private documents
@@ -290,9 +267,23 @@ class Entity():
         for doc in self._documents:
             if doc['source'] == 'public':
                 document = doc['document']
-        if document == None:
+        if document == None or prop not in document:
             return
-        self._model.delete_property(document, property, value)
+        document[prop] = filter(lambda a: a != value, document[prop])
+
+    def delete_property(self, couch_doc, prop, value):
+        """ Deletes a property from the given CouchDB document.
+            
+            :param couch_doc: the CouchDB document
+            :type couch_doc: CouchDB document object
+            :param prop: the property to delete
+            :type prop: str.
+        """
+        if prop not in couch_doc:
+            return
+        
+        couch_doc[prop] = filter(lambda a: a != value, couch_doc[prop])
+
         
     def get_properties(self):
         '''

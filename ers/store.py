@@ -1,3 +1,25 @@
+""" 
+Helper module for interaction with CouchDB. 
+
+Example CouchDB document representing partial data about 
+entity<http://www.w3.org/People/Berners-Lee/card#i>:
+
+{
+    "_id": "3d00b0cc1ea95dbaa806dbf5b96c4d5b",
+    "_rev": "1-e004c4ac4b5f7923892ad417d364a85e",
+    "@id: "http://www.w3.org/People/Berners-Lee/card#i",
+    "@owner : "urn:ers:host:a1fd2202aa76693d3e74ba657ce932f0",
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+       "Tim Berners-Lee"
+    ],
+    "http://xmlns.com/foaf/0.1/nick": [
+       "TimBL",
+       "timbl"
+    ]
+}
+
+"""
+
 import couchdbkit
 import restkit
 
@@ -11,6 +33,7 @@ DEFAULT_AUTH = ['admin', 'admin']
 
 LOCAL_DBS = ['public', 'private', 'cache']
 REMOTE_DBS = ['public', 'cache']
+OWN_DBS = ['public', 'private']
 DB_PREFIX = 'ers-'
 
 def db_name(db):

@@ -8,9 +8,7 @@ TESTS_PATH = os.path.dirname(os.path.realpath(__file__))
 ERS_PATH = os.path.dirname(TESTS_PATH)
 sys.path.insert(0, ERS_PATH)
 
-from ers.ers import ERSLocal, ERSReadOnly, ModelS
-
-DEFAULT_MODEL = ModelS()
+from ers.ers import ERSLocal, ERSReadOnly
 
 def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
