@@ -1,5 +1,41 @@
 #!/usr/bin/python
 
+"""
+Teodor Macicas, 08.Oct.2013 
+
+Some explanations about the usage of synch_global Python script. 
+
+
+Python script to be launched: ers/ers-local/ers/sync_global.py
+
+Variables that may be changed accordingly:
+1. SYNC_PERIOD_SEC -> number of seconds between to consecutive synchronizations; maybe 
+a decent value between 10s and 30s would be fine 
+2. GLOBAL_SERVER_HOST -> the IP of the global server where ERS is running 
+3. GLOBAL_SERVER_PORT -> the PORT of the global server where ERS is running 
+4. GLOBAL_SERVER_HTTP_SEQ -> the path URL of ERS's servlet for accesing the sequence number;
+the important bit here is the first part of the path as ERS may be deployed as root app or not; 
+e.g. if deployed as root app, the value MUST be 'last_sync_seq' 
+5. GLOBAL_SERVER_HTTP_BULKRUN -> same as above 
+e.g. if deployed as root app, the value MUST be 'bulkrun' 
+
+If the script is intended to be tested or used as it is (i.e. without an integration 
+with the ERS local stuff), there is already in place a test function. 
+First line creates the ERSLocal object that needs to get the CouchDB url. Therefore, that should be set 
+accordingly. The database to be synchronized is 'ers-public'. 
+
+Next step is to use the SynchronizationManager object you just created. There are two possible 
+scenarios as follows:
+1. to use one thread per each graph to be synchronized (this is the initial version when the 'id' of a
+document contains 'graph_name URN'); if needed, the thread can be stopped
+2. to start synchronization of the entire database (i.e. 'ers-public') - this is adapted to the current 
+data model; however, the problem is that whenever a delete occurs, _changes feed gives us the 'id' of 
+such a document, but not the fields it contains - therefore, '@id' field is missing and the global 
+cannot delete this document; as before, this synchronization thread can be stopped or the entire 
+program killed
+"""
+
+
 import sys
 import random
 import couchdbkit
@@ -13,7 +49,6 @@ import requests
 from threading import Thread
 from time import sleep 
 from collections import defaultdict
-from models import ModelS
 from couchdbkit.changes import ChangesStream
 from string import Template
 
@@ -21,8 +56,6 @@ import functools
 from ers import ERSLocal
 ERSReadWrite = functools.partial(ERSLocal, local_only=True)                                                        
 
-# Document model is used to store data in CouchDB. The API is independent from the choice of model.
-DEFAULT_MODEL = ModelS()
 # Maximum this number of changes are retrieved once. It can be an issue if the DB has never been synchronized
 LIMIT_MAXSEQ_PER_OP = 1000
 # A timeout of this amount of secs is run inbetween two consecutive synchronizations.

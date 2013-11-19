@@ -1,1 +1,1 @@
-from .ers import ERSLocal, ModelS
+from .ers import ERSLocal
