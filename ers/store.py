@@ -97,7 +97,19 @@ class ERSDatabase(couchdbkit.Database):
             return self.by_property(prop)
         return self.view('index/by_property_value',
                         key=[prop, value],
-                        wrapper = lambda r: r['value'])        
+                        wrapper = lambda r: r['value'])
+
+    def delete_entity(self, entity_name):
+        """ Delete an entity <entity_name>
+        
+            :param entity_name: name of the entity to delete
+            :type entity: str
+            :returns: success status
+            :rtype: bool
+        """
+        docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
+                for r in self.by_entity(entity_name)]
+        return self.save_docs(docs)
 
 
 class Store(couchdbkit.Server):

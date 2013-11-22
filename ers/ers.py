@@ -160,9 +160,7 @@ class ERSLocal(ERSReadOnly):
             :returns: success status
             :rtype: bool.
         """
-        docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
-                for r in self.store.public.by_entity(entity_name)]
-        return self.store.public.save_docs(docs)
+        return self.store.public.delete_entity(entity_name)
 
     ## Never used so far
     # def delete_value(self, entity, prop):
@@ -224,6 +222,16 @@ class ERSLocal(ERSReadOnly):
         # Save all its current documents in the cache
         for doc in entity.get_raw_documents():
             self.store.cache.save_doc(doc)
+
+    def delete_from_cache(self, entity_name):
+        """ Delete an entity from the cache.
+        
+            :param entity_name: name of the entity to delete
+            :type entity: str
+            :returns: success status
+            :rtype: bool
+        """
+        return self.store.cache.delete_entity(entity_name)
 
 
 class Entity():
@@ -289,6 +297,8 @@ class Entity():
         '''
         Get the aggregated properties out of all the individual documents
         '''
+        # TODO Lasy eval, additional params (filter='public', flatten=False)
+        # Returns: dict
         result = {}
         for doc in self._documents:
             for key, value in doc['document'].iteritems():
