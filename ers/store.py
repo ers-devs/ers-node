@@ -157,20 +157,31 @@ class Store(couchdbkit.Server):
 LocalStore = partial(Store, uri=DEFAULT_STORE_URI, databases=LOCAL_DBS, timeout=REMOTE_SERVER_TIMEOUT)                                                        
 RemoteStore = partial(Store, databases=REMOTE_DBS)                                                        
 
-def reset_local_store(auth=DEFAULT_AUTH):
+def repair_local_store(auth=DEFAULT_AUTH):
     user, password = auth
     store = LocalStore(filters=[restkit.BasicAuth(user, password)])
     for dbname in store.all_dbs():
-        # Recreate database
+        # Recreate database if needed
+        db = store.get_or_create_db(dbname)
+
+        # Create index design doc if needed
+        if not db.doc_exist('_design/index'):
+            db.save_doc(index_doc())
+
+    # Create state doc in the public database if needed
+    if not store.public.doc_exist('_local/state'):
+        store.public.save_doc(state_doc())
+
+def reset_local_store(auth=DEFAULT_AUTH):
+    user, password = auth
+    store = LocalStore(filters=[restkit.BasicAuth(user, password)])
+
+    # Delete ERS databases
+    for dbname in store.all_dbs():
         try:
             store.delete_db(dbname)
         except couchdbkit.ResourceNotFound:
             pass
-        db = store.create_db(dbname)
 
-        # Create index design doc
-        db.save_doc(index_doc())
-
-    # Create state doc in the public database
-    store.public.save_doc(state_doc())
-
+    # Create ERS databases
+    repair_local_store(auth)
