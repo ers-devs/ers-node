@@ -1,5 +1,7 @@
 """ 
-Helper module for interaction with CouchDB. 
+ers.store
+
+Routines for interaction with CouchDB. 
 
 Example CouchDB document representing partial data about 
 entity<http://www.w3.org/People/Berners-Lee/card#i>:
@@ -153,24 +155,32 @@ class Store(couchdbkit.Server):
     def all_dbs(self):
         return self.db_names.values()
 
+class LocalStore(Store):
+    """Local ERS store"""
+    def __init__(self, uri=DEFAULT_STORE_URI, **client_opts):
+        super(LocalStore, self).__init__(uri, databases=LOCAL_DBS, **client_opts)
+        self._repair()
 
-LocalStore = partial(Store, uri=DEFAULT_STORE_URI, databases=LOCAL_DBS, timeout=REMOTE_SERVER_TIMEOUT)                                                        
-RemoteStore = partial(Store, databases=REMOTE_DBS)                                                        
+    def _repair(self, auth=DEFAULT_AUTH):
+        # Authenticate with the local store
+        user, password = auth
+        server = couchdbkit.Server( uri=DEFAULT_STORE_URI,
+                                    filters=[restkit.BasicAuth(user, password)])
 
-def repair_local_store(auth=DEFAULT_AUTH):
-    user, password = auth
-    store = LocalStore(filters=[restkit.BasicAuth(user, password)])
-    for dbname in store.all_dbs():
-        # Recreate database if needed
-        db = store.get_or_create_db(dbname)
+        for dbname in self.all_dbs():
+            # Recreate database if needed
+            db = server.get_or_create_db(dbname)
 
-        # Create index design doc if needed
-        if not db.doc_exist('_design/index'):
-            db.save_doc(index_doc())
+            # Create index design doc if needed
+            if not db.doc_exist('_design/index'):
+                db.save_doc(index_doc())
 
-    # Create state doc in the public database if needed
-    if not store.public.doc_exist('_local/state'):
-        store.public.save_doc(state_doc())
+        # Create state doc in the public database if needed
+        if not self.public.doc_exist('_local/state'):
+            self.public.save_doc(state_doc())
+
+
+RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT)                                                        
 
 def reset_local_store(auth=DEFAULT_AUTH):
     user, password = auth
@@ -184,4 +194,4 @@ def reset_local_store(auth=DEFAULT_AUTH):
             pass
 
     # Create ERS databases
-    repair_local_store(auth)
+    store._repair(auth)

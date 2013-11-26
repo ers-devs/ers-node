@@ -24,7 +24,6 @@ class ERSReadOnly(object):
                  local_only=False):
         self._local_only = local_only
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
-        store.repair_local_store()
         self.store = store.LocalStore()
         self._init_host_urn()
 
