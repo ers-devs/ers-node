@@ -53,7 +53,7 @@ from couchdbkit.changes import ChangesStream
 from string import Template
 
 import functools
-from ers import ERS
+from .api import ERS
 ERSReadWrite = functools.partial(ERS, local_only=True)                                                        
 
 # Maximum this number of changes are retrieved once. It can be an issue if the DB has never been synchronized

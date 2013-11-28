@@ -7,7 +7,7 @@ import uuid
 from hashlib import md5
 from socket import gethostname
 
-import store
+from . import store
 
 class ERSReadOnly(object):
     """ The read-only class for an ERS peer.

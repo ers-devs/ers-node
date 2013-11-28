@@ -21,9 +21,9 @@ import logging
 import logging.handlers
 
 import gobject
-import zeroconf
 
-from store import ServiceStore
+from . import zeroconf
+from .store import ServiceStore
 
 ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
 
