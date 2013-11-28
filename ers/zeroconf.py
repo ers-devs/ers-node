@@ -245,7 +245,7 @@ class ERSPeerInfo(ServicePeer):
         This class contains information on an ERS peer.
     """
     def __init__(self, service_name, host, ip, port, dbname=daemon.ERS_DEFAULT_DBNAME, peer_type=daemon.ERS_DEFAULT_PEER_TYPE):
-        super(ERSPeerInfo, self).__init__(self, service_name, daemon.ERS_AVAHI_SERVICE_TYPE, host, ip, port)
+        super(ERSPeerInfo, self).__init__(service_name, daemon.ERS_AVAHI_SERVICE_TYPE, host, ip, port)
         self.dbname = dbname
         self.peer_type = peer_type
 
