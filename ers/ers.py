@@ -130,7 +130,7 @@ class ERSReadOnly(object):
         # QUESTION Other dbs?
         return self.store.public.entity_exist(entity_name)
         
-class ERSLocal(ERSReadOnly):
+class ERS(ERSReadOnly):
     """ The read-write local class for an ERS peer.
     
         :param server_url: CouchDB server URL
@@ -148,7 +148,7 @@ class ERSLocal(ERSReadOnly):
                  reset_database=False):
         if reset_database:
             store.reset_local_store()
-        super(ERSLocal, self).__init__(fixed_peers, local_only)
+        super(ERS, self).__init__(fixed_peers, local_only)
 
     def delete_entity(self, entity_name):
         """ Delete an entity from the public store.

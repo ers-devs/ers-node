@@ -8,7 +8,7 @@ TESTS_PATH = os.path.dirname(os.path.realpath(__file__))
 ERS_PATH = os.path.dirname(TESTS_PATH)
 sys.path.insert(0, ERS_PATH)
 
-from ers.ers import ERSLocal, ERSReadOnly
+from ers.ers import ERS, ERSReadOnly
 
 def test():
     server = couchdbkit.Server(r'http://admin:admin@127.0.0.1:5984/')
@@ -62,19 +62,19 @@ def test():
     all_objects = local_objects | remote_objects
 
     # Test local ers
-    ers = ERSLocal(reset_database=True)
+    ers = ERS(reset_database=True)
     test_ers()
 
     ers = ERSReadOnly()
     assert ers.contains_entity(s2) == True
 
     # # Prepare remote ers
-    # ers_remote = ERSLocal(dbname='ers_remote')
+    # ers_remote = ERS(dbname='ers_remote')
     # for o in remote_objects:
     #     ers_remote.add_data(entity, p, o, g3)
 
     # # Query remote
-    # ers_local = ERSLocal(dbname='ers_models', fixed_peers=[{'url': r'http://admin:admin@127.0.0.1:5984/',
+    # ers_local = ERS(dbname='ers_models', fixed_peers=[{'url': r'http://admin:admin@127.0.0.1:5984/',
     #                                                         'dbname': 'ers_remote'}])
     # assert set(ers_local.get_annotation(entity)[p]) == all_objects
     # assert set(ers_local.get_values(entity, p)) == all_objects

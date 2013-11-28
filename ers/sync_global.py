@@ -21,7 +21,7 @@ e.g. if deployed as root app, the value MUST be 'bulkrun'
 
 If the script is intended to be tested or used as it is (i.e. without an integration 
 with the ERS local stuff), there is already in place a test function. 
-First line creates the ERSLocal object that needs to get the CouchDB url. Therefore, that should be set 
+First line creates the ERS object that needs to get the CouchDB url. Therefore, that should be set 
 accordingly. The database to be synchronized is 'ers-public'. 
 
 Next step is to use the SynchronizationManager object you just created. There are two possible 
@@ -53,8 +53,8 @@ from couchdbkit.changes import ChangesStream
 from string import Template
 
 import functools
-from ers import ERSLocal
-ERSReadWrite = functools.partial(ERSLocal, local_only=True)                                                        
+from ers import ERS
+ERSReadWrite = functools.partial(ERS, local_only=True)                                                        
 
 # Maximum this number of changes are retrieved once. It can be an issue if the DB has never been synchronized
 LIMIT_MAXSEQ_PER_OP = 1000

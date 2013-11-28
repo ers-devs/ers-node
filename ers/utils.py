@@ -9,7 +9,7 @@ def import_nt(registry, file_name, target_graph):
     """ Import N-Triples file.
     
         :param registry: registry used for writing the data
-        :type registry: ERSLocal instance
+        :type registry: ERS instance
         :param file_name: file name
         :type file_name: str.
         :param target_graph: graph to write to
@@ -22,7 +22,7 @@ def import_nt_rdflib(registry, file_name, target_graph):
     """ Import N-Triples file using rdflib.
     
         :param registry: registry used for writing the data
-        :type registry: ERSLocal instance
+        :type registry: ERS instance
         :param file_name: file name
         :type file_name: str.
         :param target_graph: graph to write to
