@@ -160,6 +160,11 @@ class ERSDaemon(object):
             return
 
         self.logger.debug("Peer joined: " + str(ers_peer))
+        try:
+            socket.inet_pton(socket.AF_INET, ers_peer.ip)
+        except socket.error:
+            self.logger.debug("Peer ignored: {} does not appear to be a valid IPv4 address".format(ers_peer.ip))
+            return
 
         self._peers[ers_peer.service_name] = ers_peer
         if ers_peer.peer_type == ERS_PEER_TYPE_BRIDGE:
