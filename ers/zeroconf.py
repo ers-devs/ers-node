@@ -5,6 +5,11 @@ is supported.
 
 __author__ = 'Cristian Dinu <goc9000@gmail.com>'
 
+# Need this import because constants for ERSPeerInfo are still in daemon
+import daemon
+
+import re
+
 try:
     import avahi
     import dbus
@@ -30,7 +35,7 @@ def _check_avahi_supported():
         raise RuntimeError("Python Avahi support not installed! (packages 'avahi' and 'dbus')")
 
 
-class PublishedService:
+class PublishedService(object):
     """
     This class represents a service published over Zeroconf.
     """
@@ -80,7 +85,7 @@ class PublishedService:
             self._group = None
 
 
-class ServiceMonitor:
+class ServiceMonitor(object):
     """
     This class represents a monitor for services of a given type advertised over the network.
 
@@ -98,14 +103,6 @@ class ServiceMonitor:
       even if the service was published some time in the past.
     - Note: If `see_self` is set to True, the monitor will also report services published locally.
     """
-    service_type = None
-    on_join = None
-    on_leave = None
-    on_error = None
-    see_self = None
-
-    _active = None
-    _inited = None
     _server = None
     _peers = None
 
@@ -211,16 +208,27 @@ class ServiceMonitor:
         return self._peers.values()
 
 
-class ServicePeer:
+class PeerInfo(object):
+    """docstring for Peer"""
+    def __init__(self, arg):
+        super(Peer, self).__init__()
+        self.arg = arg
+
+    def to_string(self):
+        pass
+        
+    def from_string(self):
+        pass
+        
+    def to_dict(self):
+        pass
+        
+
+
+class ServicePeer(object):
     """
     This class represents a peer over a given service published via Zeroconf on the network.
     """
-    service_name = None
-    service_type = None
-    host = None
-    ip = None
-    port = None
-
     def __init__(self, service_name, service_type, host, ip, port):
         self.service_name = service_name
         self.service_type = service_type
@@ -231,6 +239,59 @@ class ServicePeer:
     def __str__(self):
         return "'{0}' of type {1} on {2}(={3}):{4}".format(self.service_name, self.service_type, self.host,
                                                            self.ip, self.port)
+
+class ERSPeerInfo(ServicePeer):
+    """ 
+        This class contains information on an ERS peer.
+    """
+    def __init__(self, service_name, host, ip, port, dbname=daemon.ERS_DEFAULT_DBNAME, peer_type=daemon.ERS_DEFAULT_PEER_TYPE):
+        super(ERSPeerInfo, self).__init__(self, service_name, daemon.ERS_AVAHI_SERVICE_TYPE, host, ip, port)
+        self.dbname = dbname
+        self.peer_type = peer_type
+
+    def __str__(self):
+        return "ERS peer on {0.host}(={0.ip}):{0.port} (dbname={0.dbname}, type={0.peer_type})".format(self)
+
+    def to_json(self):
+        """ Returns the ERS peer information from this instance in JSON format.
+        
+            :rtype: dict.
+        """
+        return {
+            'name': self.service_name,
+            'host': self.host,
+            'ip': self.ip,
+            'port': self.port,
+            'dbname': self.dbname,
+            'type': self.peer_type
+        }
+
+    @staticmethod
+    def from_service_peer(svc_peer):
+        """ 
+            Get an ERSPeerInfo instance from a given service peer.
+        
+            :param svc_peer: a service peer
+            :type svc_peer: ServicePeer instance
+            :rtype: ERSPeerInfo instance
+        """
+        dbname = daemon.ERS_DEFAULT_DBNAME
+        peer_type = daemon.ERS_DEFAULT_PEER_TYPE
+
+        match = re.match(r'ERS on .* [(](.*)[)]$', svc_peer.service_name)
+        if match is None:
+            return None
+
+        for item in match.group(1).split(','):
+            param, sep, value = item.partition('=')
+
+            if param == 'dbname':
+                dbname = value
+            if param == 'type':
+                peer_type = value
+
+        return ERSPeerInfo(svc_peer.service_name, svc_peer.host, svc_peer.ip, svc_peer.port, dbname, peer_type)
+
 
 
 def test():

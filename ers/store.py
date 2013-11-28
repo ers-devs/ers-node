@@ -157,11 +157,11 @@ class Store(couchdbkit.Server):
 
 class LocalStore(Store):
     """Local ERS store"""
-    def __init__(self, uri=DEFAULT_STORE_URI, **client_opts):
-        super(LocalStore, self).__init__(uri, databases=LOCAL_DBS, **client_opts)
-        self._repair()
+    def __init__(self, uri=DEFAULT_STORE_URI, databases=LOCAL_DBS, **client_opts):
+        super(LocalStore, self).__init__(uri=uri, databases=databases, **client_opts)
+        self.repair()
 
-    def _repair(self, auth=DEFAULT_AUTH):
+    def repair(self, auth=DEFAULT_AUTH):
         # Authenticate with the local store
         user, password = auth
         server = couchdbkit.Server( uri=DEFAULT_STORE_URI,
@@ -180,7 +180,40 @@ class LocalStore(Store):
             self.public.save_doc(state_doc())
 
 
+class ServiceStore(LocalStore):
+    """ServiceStore is used by ERS daemon"""
+    def __init__(self, uri=DEFAULT_STORE_URI, databases=LOCAL_DBS,
+                    auth=DEFAULT_AUTH, **client_opts):
+        user, password = auth
+        filters = client_opts.pop('filters', [])
+        filters.append(restkit.BasicAuth(user, password))
+        super(ServiceStore, self).__init__( uri=uri,
+                                            databases=databases,
+                                            filters=filters,
+                                            **client_opts)
+        self.replicator = self['_replicator']
+
+    def cache_contents(self):
+        return list(self.cache.all_docs(startkey=u"_\ufff0",
+                                        wrapper=lambda r: r['id']))
+
+    def replicator_docs(self):
+        return self.replicator.all_docs(
+                        startkey=u"ers-auto-",
+                        endkey=u"ers-auto-\ufff0",
+                        wrapper = lambda r: (r['id'], r['value']['rev']))
+
+    def update_replicator_docs(self, repl_docs):
+        for doc_id, doc_rev in self.replicator_docs():
+            if doc_id in repl_docs:
+                repl_docs[doc_id]['_rev'] = doc_rev
+            else:
+                repl_docs[doc_id] = {"_id": doc_id, "_rev": doc_rev, "_deleted": True}
+        self.replicator.save_docs(repl_docs.values())
+
+
 RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT)                                                        
+
 
 def reset_local_store(auth=DEFAULT_AUTH):
     user, password = auth
@@ -194,4 +227,4 @@ def reset_local_store(auth=DEFAULT_AUTH):
             pass
 
     # Create ERS databases
-    store._repair(auth)
+    store.repair(auth)
