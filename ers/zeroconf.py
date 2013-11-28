@@ -6,7 +6,7 @@ is supported.
 __author__ = 'Cristian Dinu <goc9000@gmail.com>'
 
 # Need this import because constants for ERSPeerInfo are still in daemon
-from . import daemon
+import daemon
 
 import re
 
