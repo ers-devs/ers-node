@@ -140,8 +140,8 @@ class Store(couchdbkit.Server):
         """
         """
         def aggregate(self, *args, **kwargs):
-            return chain(*(getattr(self[db_name], method_name)(*args, **kwargs).iterator()
-                            for db_name in self.all_dbs()))
+            return chain(*[getattr(self[db_name], method_name)(*args, **kwargs).iterator()
+                            for db_name in self.all_dbs()])
         aggregate.__doc__ = """Calls method {}() of all databases in the store and returns an iterator over combined results""".format(method_name)
         aggregate.__name__ = method_name
         setattr(cls, method_name, aggregate)
