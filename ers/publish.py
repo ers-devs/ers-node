@@ -1,12 +1,11 @@
 #!/usr/bin/python
 
 """
-Teodor Macicas, 08.Oct.2013 
+ers.publish
 
-Some explanations about the usage of synch_global Python script. 
+Pushes local changes to Aggregator
 
-
-Python script to be launched: ers/ers-local/ers/sync_global.py
+Python script to be launched: python publish.py
 
 Variables that may be changed accordingly:
 1. SYNC_PERIOD_SEC -> number of seconds between to consecutive synchronizations; maybe 
@@ -34,6 +33,8 @@ such a document, but not the fields it contains - therefore, '@id' field is miss
 cannot delete this document; as before, this synchronization thread can be stopped or the entire 
 program killed
 """
+
+__author__ = 'Teodor Macicas'
 
 
 import sys

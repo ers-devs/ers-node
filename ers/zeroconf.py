@@ -1,4 +1,6 @@
 """
+ers.zeroconf
+
 This module contains functions for publishing and discovering services over Zeroconf protocols. Currently only Avahi
 is supported.
 """
