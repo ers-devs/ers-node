@@ -277,22 +277,8 @@ class Entity():
                 document = doc['document']
         if document == None or prop not in document:
             return
-        document[prop] = filter(lambda a: a != value, document[prop])
+        document[prop] = [v for v in document[prop] if v != value]
 
-    def delete_property(self, couch_doc, prop, value):
-        """ Deletes a property from the given CouchDB document.
-            
-            :param couch_doc: the CouchDB document
-            :type couch_doc: CouchDB document object
-            :param prop: the property to delete
-            :type prop: str.
-        """
-        if prop not in couch_doc:
-            return
-        
-        couch_doc[prop] = filter(lambda a: a != value, couch_doc[prop])
-
-        
     def get_properties(self):
         '''
         Get the aggregated properties out of all the individual documents
