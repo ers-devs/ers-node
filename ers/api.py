@@ -1,5 +1,9 @@
-#!/usr/bin/python
+"""
+ers.api
 
+Provides class ERS implementing API to Entity Rgistry System.
+
+"""
 import re
 import sys
 import uuid
@@ -10,10 +14,8 @@ from socket import gethostname
 import store
 
 class ERSReadOnly(object):
-    """ The read-only class for an ERS peer.
+    """ ERS version with read-only methods.
     
-        :param server_url: CouchDB server URL
-        :type server_url: str
         :param fixed_peers: URL's of known peers
         :type fixed_peers: list
         :param local_only: whether or not the peer is local-only
@@ -133,8 +135,6 @@ class ERSReadOnly(object):
 class ERS(ERSReadOnly):
     """ The read-write local class for an ERS peer.
     
-        :param server_url: CouchDB server URL
-        :type server_url: str
         :param fixed_peers: known peers
         :type fixed_peers: tuple
         :param local_only: if True ERS will not attempt to connect to remote peers
@@ -162,7 +162,7 @@ class ERS(ERSReadOnly):
         """
         return self.store.public.delete_entity(entity_name)
 
-    ## Never used so far
+    ## Never used so far, consider moving to Entity()
     # def delete_value(self, entity, prop):
     #     """ Delete all of the peer's values for a property in an entity.
         

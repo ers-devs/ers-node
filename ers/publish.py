@@ -1,12 +1,11 @@
 #!/usr/bin/python
 
 """
-Teodor Macicas, 08.Oct.2013 
+ers.publish
 
-Some explanations about the usage of synch_global Python script. 
+Pushes local changes to Aggregator
 
-
-Python script to be launched: ers/ers-local/ers/sync_global.py
+Python script to be launched: python publish.py
 
 Variables that may be changed accordingly:
 1. SYNC_PERIOD_SEC -> number of seconds between to consecutive synchronizations; maybe 
@@ -35,6 +34,8 @@ cannot delete this document; as before, this synchronization thread can be stopp
 program killed
 """
 
+__author__ = 'Teodor Macicas'
+
 
 import sys
 import random
@@ -53,7 +54,7 @@ from couchdbkit.changes import ChangesStream
 from string import Template
 
 import functools
-from ers import ERS
+from api import ERS
 ERSReadWrite = functools.partial(ERS, local_only=True)                                                        
 
 # Maximum this number of changes are retrieved once. It can be an issue if the DB has never been synchronized
