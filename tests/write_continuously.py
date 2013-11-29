@@ -5,7 +5,7 @@ import random, platform
 import ers
 from time import time, sleep
 
-registry = ers.ERSLocal(reset_database=True)
+registry = ers.ERS(reset_database=True)
 node = platform.node()
 
 def random_urn():

@@ -1,7 +1,7 @@
 import argparse
 import random
 import time
-from ers import ERSLocal
+from ers import ERS
 
 
 def rand_digits(count):
@@ -15,7 +15,7 @@ parser.add_argument("-b", "--batch_size", help="number of tuples in a batch", ty
 parser.add_argument("-e", "--entities", help="entities in a batch", type=int, default=2)
 args = parser.parse_args()
 
-ers = ERSLocal()
+ers = ERS()
 
 print "Doing writes approx every {0} second(s), use CTRL+C to abort".format(args.interval)
 
