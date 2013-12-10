@@ -54,14 +54,14 @@ class ERSReadOnly(object):
                 entity.add_document(doc, source)
          
         # Get documents out of public/cache of connected peers
+        # TODO parallelize 
         for peer in self.get_peers():
             remote_docs = []
             try:
-                remote_store = store.RemoteStore(peer['server_url'])
-                remote_docs.extend(remote_store.docs_by_entity(entity_name))
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}\n".format(peer))
-                continue
+                remote_docs = store.query_remote(peer['server_url'],
+                    'docs_by_entity', entity_name)
+            except Exception as e:
+                sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
             else:
                 for doc in remote_docs:
                     entity.add_document(doc, 'remote')
@@ -83,10 +83,10 @@ class ERSReadOnly(object):
         for peer in self.get_peers():
             remote_result = []
             try:
-                remote_store = store.RemoteStore(peer['server_url'])
-                remote_result = set(remote_store.by_property_value(prop, value))
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}\n".format(peer))
+                remote_result = store.query_remote(peer['server_url'],
+                    'by_property_value', prop, value)
+            except Exception as e:
+                sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
             else:
                 result.update(remote_result)
 

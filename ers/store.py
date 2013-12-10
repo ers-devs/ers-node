@@ -27,8 +27,9 @@ import restkit
 
 from functools import partial
 from itertools import chain
+from timeout import timeout
 
-REMOTE_SERVER_TIMEOUT = 300
+REMOTE_SERVER_TIMEOUT = 1
 
 DEFAULT_STORE_URI = 'http://127.0.0.1:5984'
 DEFAULT_AUTH = ['admin', 'admin']
@@ -217,6 +218,12 @@ class ServiceStore(LocalStore):
 
 RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT)                                                        
 
+
+@timeout(REMOTE_SERVER_TIMEOUT)
+def query_remote(uri, method_name, *args, **kwargs):
+    # import ipdb; ipdb.set_trace()
+    remote_store = RemoteStore(uri)
+    return list(getattr(remote_store, method_name)(*args, **kwargs))
 
 def reset_local_store(auth=DEFAULT_AUTH):
     user, password = auth
