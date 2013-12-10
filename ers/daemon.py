@@ -21,8 +21,9 @@ import logging
 import logging.handlers
 
 import gobject
-import zeroconf
+import restkit
 
+import zeroconf
 from store import ServiceStore
 
 ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
@@ -216,6 +217,8 @@ class ERSDaemon(object):
 
     def _update_cache(self):
         cache_contents = self._store.cache_contents()
+        if not cache_contents:
+            return
         for peer in self._peers.values():
             for dbname in ('ers-public', 'ers-cache'):
                 source_db = r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
