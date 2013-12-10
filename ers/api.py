@@ -10,8 +10,11 @@ import uuid
 
 from hashlib import md5
 from socket import gethostname
+from collections import Counter
+from random import randrange
 
 import store
+from timeout import TimeoutError
 
 class ERSReadOnly(object):
     """ ERS version with read-only methods.
@@ -26,6 +29,7 @@ class ERSReadOnly(object):
                  local_only=False):
         self._local_only = local_only
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
+        self._timeout_count = Counter()
         self.store = store.LocalStore()
         self._init_host_urn()
 
@@ -38,6 +42,13 @@ class ERSReadOnly(object):
         @return a unique identifier for this ERS node
         '''
         return str(uuid.getnode())
+
+    def _is_failing(url):
+        """
+        Returns True for url's which failed to respond with increasing probability.
+        Returns False for url's which did not fail.
+        """
+        return randrange(self._timeout_count[url] + 1) != 0
 
     def get_entity(self, entity_name):
         '''
@@ -56,13 +67,21 @@ class ERSReadOnly(object):
         # Get documents out of public/cache of connected peers
         # TODO parallelize 
         for peer in self.get_peers():
+            url = peer['server_url']
+            if self._is_failing(url):
+                continue
+
             remote_docs = []
             try:
-                remote_docs = store.query_remote(peer['server_url'],
-                    'docs_by_entity', entity_name)
+                remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
+            except TimeoutError:
+                self._timeout_count[url] += 1
+                sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                    url, self._timeout_count[url]))
             except Exception as e:
                 sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
             else:
+                self._timeout_count.pop(url, 0)
                 for doc in remote_docs:
                     entity.add_document(doc, 'remote')
         return entity
@@ -81,13 +100,21 @@ class ERSReadOnly(object):
 
         # Search peers
         for peer in self.get_peers():
+            url = peer['server_url']
+            if self._is_failing(url):
+                continue
+
             remote_result = []
             try:
-                remote_result = store.query_remote(peer['server_url'],
-                    'by_property_value', prop, value)
+                remote_result = store.query_remote(url, 'by_property_value', prop, value)
+            except TimeoutError:
+                self._timeout_count[url] += 1
+                sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                    url, self._timeout_count[url]))
             except Exception as e:
                 sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
             else:
+                self._timeout_count.pop(url, 0)
                 result.update(remote_result)
 
         return list(result)

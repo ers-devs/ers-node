@@ -29,7 +29,7 @@ from functools import partial
 from itertools import chain
 from timeout import timeout
 
-REMOTE_SERVER_TIMEOUT = 1
+REMOTE_SERVER_TIMEOUT = 0.3
 
 DEFAULT_STORE_URI = 'http://127.0.0.1:5984'
 DEFAULT_AUTH = ['admin', 'admin']

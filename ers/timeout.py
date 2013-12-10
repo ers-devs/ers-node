@@ -12,7 +12,7 @@ Code to timeout with processes.
 >>> sleep(1)
 Traceback (most recent call last):
    ...
-TimeoutException: timed out after 0 seconds
+TimeoutError: timed out after 0 seconds
 
 >>> sleep(.2)
 0.2
@@ -31,10 +31,10 @@ import multiprocessing
 import time
 import logging
 logger = multiprocessing.log_to_stderr()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.ERROR)
 
 
-class TimeoutException(Exception):
+class TimeoutError(Exception):
     pass
 
 
@@ -69,7 +69,7 @@ def timeout(seconds, force_kill=True):
                 if force_kill:
                     proc.terminate()
                 runtime = int(time.time() - now)
-                raise TimeoutException('timed out after {0} seconds'.format(runtime))
+                raise TimeoutError('timed out after {0} seconds'.format(runtime))
             assert proc.done()
             success, result = proc.result()
             if success:
