@@ -60,7 +60,7 @@ class ERSReadOnly(object):
                 remote_store = store.RemoteStore(peer['server_url'])
                 remote_docs.extend(remote_store.docs_by_entity(entity_name))
             except:
-                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                sys.stderr.write("Warning: failed to query remote peer {0}\n".format(peer))
                 continue
             else:
                 for doc in remote_docs:
@@ -86,7 +86,7 @@ class ERSReadOnly(object):
                 remote_store = store.RemoteStore(peer['server_url'])
                 remote_result = set(remote_store.by_property_value(prop, value))
             except:
-                sys.stderr.write("Warning: failed to query remote peer {0}".format(peer))
+                sys.stderr.write("Warning: failed to query remote peer {0}\n".format(peer))
             else:
                 result.update(remote_result)
 
