@@ -43,7 +43,7 @@ class ERSReadOnly(object):
         '''
         return str(uuid.getnode())
 
-    def _is_failing(url):
+    def _is_failing(self, url):
         """
         Returns True for url's which failed to respond with increasing probability.
         Returns False for url's which did not fail.
