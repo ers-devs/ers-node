@@ -209,7 +209,10 @@ class ServiceStore(LocalStore):
                 repl_docs[doc_id]['_rev'] = doc_rev
             else:
                 repl_docs[doc_id] = {"_id": doc_id, "_rev": doc_rev, "_deleted": True}
-        self.replicator.save_docs(repl_docs.values())
+        try:
+            self.replicator.save_docs(repl_docs.values())
+        except couchdbkit.exceptions.BulkSaveError as e:
+            print "Error while trying to update replicator docs: {}".format(e.errors)
 
 
 RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT)                                                        
