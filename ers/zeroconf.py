@@ -22,6 +22,16 @@ try:
 except ImportError as e:
     AVAHI_SUPPORTED = False
 
+try:
+    import pybonjour
+    import select
+    import socket
+    import threading
+
+    PYBONJOUR_SUPPORTED = True
+except ImportError as e:
+    PYBONJOUR_SUPPORTED = False
+
 
 def _listify(value):
     if value is None:
@@ -30,11 +40,6 @@ def _listify(value):
         return [value]
     else:
         return list(value)
-
-
-def _check_avahi_supported():
-    if not AVAHI_SUPPORTED:
-        raise RuntimeError("Python Avahi support not installed! (packages 'avahi' and 'dbus')")
 
 
 class PublishedService(object):
@@ -67,16 +72,40 @@ class PublishedService(object):
         """
         Publishes the service defined by this handle.
         """
-        _check_avahi_supported()
 
-        loop = DBusGMainLoop(set_as_default=True)
-        bus = dbus.SystemBus(mainloop=loop)
-        server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-        g = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
-        g.AddService(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, dbus.UInt32(0), self.name, self.service_type, self.domain,
-                     self.host, dbus.UInt16(self.port), self.text)
-        g.Commit()
-        self._group = g
+        if AVAHI_SUPPORTED:
+            loop = DBusGMainLoop(set_as_default=True)
+            bus = dbus.SystemBus(mainloop=loop)
+            server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+            g = dbus.Interface(bus.get_object(avahi.DBUS_NAME, server.EntryGroupNew()), avahi.DBUS_INTERFACE_ENTRY_GROUP)
+            g.AddService(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, dbus.UInt32(0), self.name, self.service_type, self.domain,
+                         self.host, dbus.UInt16(self.port), self.text)
+            g.Commit()
+            self._group = g
+        elif PYBONJOUR_SUPPORTED:
+            def _pybonjour_service_thread():
+                def _register_callback(sd_ref, flags, error_code, name, regtype, domain):
+                    if error_code != pybonjour.kDNSServiceErr_NoError:
+                        print "Error while registering service {0}".format(name)
+                    
+                    print "Registered service:\n  name    = {0}\n  regtype = {1}\n  domain  = {2}".format(name, regtype, domain)
+
+                sd_ref = pybonjour.DNSServiceRegister(name = self.name, regtype = self.service_type,
+                                                      port = self.port, callBack = _register_callback)
+
+                try:
+                    while True:
+                        ready = select.select([sd_ref], [], [])
+                        if sd_ref in ready[0]:
+                            pybonjour.DNSServiceProcessResult(sd_ref)
+                finally:
+                    sd_ref.close()
+
+            _thread = threading.Thread(target=_pybonjour_service_thread)
+            _thread.daemon = True
+            _thread.start()
+        else:
+            raise RuntimeError("Avahi nor Bonjour support installed! (Python packages 'avahi' and 'dbus', or 'pybonjour')")
 
     def unpublish(self):
         """
@@ -130,50 +159,146 @@ class ServiceMonitor(object):
         """
         Starts the monitor.
         """
-        _check_avahi_supported()
 
         if self._inited:
             self._active = True
             return
 
-        loop = DBusGMainLoop(set_as_default=True)
-        bus = dbus.SystemBus(mainloop=loop)
-        server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
-        self._server = server
-        self._active = True
-        browser = dbus.Interface(bus.get_object(avahi.DBUS_NAME,
-                                                server.ServiceBrowserNew(avahi.IF_UNSPEC,
-                                                                         avahi.PROTO_UNSPEC,
-                                                                         self.service_type,
-                                                                         'local',
-                                                                         dbus.UInt32(0))),
-                                 avahi.DBUS_INTERFACE_SERVICE_BROWSER)
+        if AVAHI_SUPPORTED:
+            loop = DBusGMainLoop(set_as_default=True)
+            bus = dbus.SystemBus(mainloop=loop)
+            server = dbus.Interface(bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+            self._server = server
+            self._active = True
+            browser = dbus.Interface(bus.get_object(avahi.DBUS_NAME,
+                                                    server.ServiceBrowserNew(avahi.IF_UNSPEC,
+                                                                             avahi.PROTO_UNSPEC,
+                                                                             self.service_type,
+                                                                             'local',
+                                                                             dbus.UInt32(0))),
+                                     avahi.DBUS_INTERFACE_SERVICE_BROWSER)
 
-        browser.connect_to_signal("ItemNew", self._on_item_new)
-        browser.connect_to_signal("ItemRemove", self._on_item_remove)
-        self._inited = True
+            browser.connect_to_signal("ItemNew", _on_item_new)
+            browser.connect_to_signal("ItemRemove", _on_item_remove)
+            self._inited = True
+            
+            def _on_item_new(interface, protocol, name, service_type, domain, flags):
+                if (flags & avahi.LOOKUP_RESULT_LOCAL) and not self.see_self:
+                    return
 
-    def _on_item_new(self, interface, protocol, name, service_type, domain, flags):
-        if (flags & avahi.LOOKUP_RESULT_LOCAL) and not self.see_self:
-            return
+                self._server.ResolveService(interface, protocol, name, service_type, domain, avahi.PROTO_UNSPEC, dbus.UInt32(0),
+                                            reply_handler=_on_resolved, error_handler=_on_resolve_error)
 
-        self._server.ResolveService(interface, protocol, name, service_type, domain, avahi.PROTO_UNSPEC, dbus.UInt32(0),
-                                    reply_handler=self._on_resolved, error_handler=self._on_resolve_error)
+            def _on_item_remove(interface, protocol, name, service_type, domain, flags):
+                self._on_peer_leave(name)
 
-    def _on_item_remove(self, interface, protocol, name, service_type, domain, flags):
-        peer_name = unicode(name)
+            def _on_resolved(interface, protocol, name, service, domain, host, aproto, address, port, txt, flags):
+                self._on_peer_join(name, host, address, port)
 
-        if peer_name not in self._peers:
-            return
+            def _on_resolve_error(*args):
+                message = 'Error resolving service: ' + ' '.join(str(arg) for arg in args)
 
-        ex_peer = self._peers[peer_name]
-        del self._peers[peer_name]
+                if self._active:
+                    for callback in self.on_error:
+                        callback(message)
+                        
+        elif PYBONJOUR_SUPPORTED:
+            def _pybonjour_monitor_thread():
+                _queried  = []
+                _resolved = []
 
-        if self._active:
-            for callback in self.on_leave:
-                callback(ex_peer)
+                def _try_query(sd_ref, result_buffer):                
+                    result = None
 
-    def _on_resolved(self, interface, protocol, name, service, domain, host, aproto, address, port, txt, flags):
+                    while result_buffer:
+                        result_buffer.pop()
+                
+                    try:
+                        while not result_buffer:
+                            ready = select.select([sd_ref], [], [], 5)
+                            if sd_ref not in ready[0]:
+                                print 'Query timed out'
+                                break
+                            pybonjour.DNSServiceProcessResult(sd_ref)
+                        else:
+                            result = result_buffer[0]
+                            result_buffer.pop()
+                    finally:
+                        sd_ref.close()
+                
+                    return result
+
+                def _on_queried(sd_ref, flags, interface_index, error_code, fullname, rrtype, rrclass, rdata, ttl):
+                    if error_code != pybonjour.kDNSServiceErr_NoError:
+                        print "Error while getting IP for service {0}".format(fullname)
+                        _queried.append(None)
+                        return
+                    
+                    print "  IP         = {0}".format(socket.inet_ntoa(rdata))
+                
+                    _queried.append(socket.inet_ntoa(rdata))
+
+                def _on_resolved(sd_ref, flags, interface_index, error_code, fullname, hosttarget, port, txt_record):
+                    if error_code != pybonjour.kDNSServiceErr_NoError:
+                        print "Error while resolving service {0}".format(fullname)
+                        _resolved.append(None)
+                        return
+
+                    print "Resolved service:\n  fullname   = {0}\n  hosttarget = {1}\n  port       = {2}".format(fullname, hosttarget, port)
+
+                    query_sd_ref = pybonjour.DNSServiceQueryRecord(interfaceIndex = interface_index, fullname = hosttarget,
+                                                                  rrtype = pybonjour.kDNSServiceType_A, callBack = _on_queried)
+
+                    address = _try_query(query_sd_ref, _queried)
+
+                    if address is None:
+                        print "Error while resolving service {0}".format(full_name)
+
+                    _resolved.append((hosttarget, address, port))
+
+                def _on_browsed(sd_ref, flags, interface_index, error_code, service_name, regtype, reply_domain):
+                    if error_code != pybonjour.kDNSServiceErr_NoError:
+                        return
+
+                    if not (flags & pybonjour.kDNSServiceFlagsAdd):
+                        self._on_peer_leave(service_name)
+                        print 'Service removed'
+                        return
+
+                    print 'Service added; resolving'
+
+                    resolve_sd_ref = pybonjour.DNSServiceResolve(0, interface_index, service_name, regtype, reply_domain, _on_resolved)
+
+                    service = _try_query(resolve_sd_ref, _resolved)
+
+                    if service is None:
+                        print "Error resolving service {0}".format(service_name)
+                        return
+                
+                    host, address, port = service
+                    if self.see_self or not (socket.gethostname().partition('.')[0] == host.partition('.')[0]):
+                        self._on_peer_join(service_name, host, address, port)
+
+                browse_sd_ref = pybonjour.DNSServiceBrowse(regtype = self.service_type, callBack = _on_browsed)
+
+                try:
+                    while True:
+                        ready = select.select([browse_sd_ref], [], [])
+                        if browse_sd_ref in ready[0]:
+                            pybonjour.DNSServiceProcessResult(browse_sd_ref)
+                finally:
+                    browse_sd_ref.close()
+                
+                self._inited = True
+
+            _thread = threading.Thread(target=_pybonjour_monitor_thread)
+            _thread.daemon = True
+            _thread.start()
+                
+        else:
+            raise RuntimeError("Avahi nor Bonjour support installed! (Python packages 'avahi' and 'dbus', or 'pybonjour')")
+
+    def _on_peer_join(self, name, host, address, port):
         peer_name = unicode(name)
 
         if peer_name in self._peers:
@@ -189,13 +314,19 @@ class ServiceMonitor(object):
         if self._active:
             for callback in self.on_join:
                 callback(peer)
+        
+    def _on_peer_leave(self, name):
+        peer_name = unicode(name)
 
-    def _on_resolve_error(self, *args):
-        message = 'Error resolving service: ' + ' '.join(str(arg) for arg in args)
+        if peer_name not in self._peers:
+            return
+
+        ex_peer = self._peers[peer_name]
+        del self._peers[peer_name]
 
         if self._active:
-            for callback in self.on_error:
-                callback(message)
+            for callback in self.on_leave:
+                callback(ex_peer)
 
     def shutdown(self):
         """
