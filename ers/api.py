@@ -1,12 +1,11 @@
 """
 ers.api
 
-Provides class ERS implementing API to Entity Rgistry System.
+Provides class ERS implementing API to Entity Registry System.
 
 """
 import re
 import sys
-import uuid
 
 from hashlib import md5
 from socket import gethostname
@@ -34,14 +33,18 @@ class ERSReadOnly(object):
         self._init_host_urn()
 
     def _init_host_urn(self):
-        fingerprint = md5(gethostname()).hexdigest()
-        self.host_urn = "urn:ers:host:{}".format(fingerprint)
+        # Use uuid provided by CouchDB 1.3+, fallback to hostname fingerprint
+        try:
+            uid = self.store.info()['uuid']
+        except KeyError:
+            uid = md5(gethostname()).hexdigest()
+        self.host_urn = "urn:ers:host:{}".format(uid)
 
     def get_machine_uuid(self):
         '''
         @return a unique identifier for this ERS node
         '''
-        return str(uuid.getnode())
+        return self.host_urn.split(':')[-1]
 
     def _is_failing(self, url):
         """
