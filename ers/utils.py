@@ -1,9 +1,7 @@
-
 from collections import defaultdict
 from StringIO import StringIO
-import rdflib
 
-# Document model is used to store data in CouchDB. The API is independent from the choice of model.
+import rdflib
 
 def import_nt(registry, file_name, target_graph):
     """ Import N-Triples file.

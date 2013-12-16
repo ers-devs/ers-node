@@ -1,17 +1,19 @@
 """
 ers.api
 
-Provides class ERS implementing API to Entity Rgistry System.
+Provides class ERS implementing API to Entity Registry System.
 
 """
 import re
 import sys
-import uuid
 
 from hashlib import md5
 from socket import gethostname
+from collections import Counter
+from random import randrange
 
 import store
+from timeout import TimeoutError
 
 class ERSReadOnly(object):
     """ ERS version with read-only methods.
@@ -26,18 +28,30 @@ class ERSReadOnly(object):
                  local_only=False):
         self._local_only = local_only
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
+        self._timeout_count = Counter()
         self.store = store.LocalStore()
         self._init_host_urn()
 
     def _init_host_urn(self):
-        fingerprint = md5(gethostname()).hexdigest()
-        self.host_urn = "urn:ers:host:{}".format(fingerprint)
+        # Use uuid provided by CouchDB 1.3+, fallback to hostname fingerprint
+        try:
+            uid = self.store.info()['uuid']
+        except KeyError:
+            uid = md5(gethostname()).hexdigest()
+        self.host_urn = "urn:ers:host:{}".format(uid)
 
     def get_machine_uuid(self):
         '''
         @return a unique identifier for this ERS node
         '''
-        return str(uuid.getnode())
+        return self.host_urn.split(':')[-1]
+
+    def _is_failing(self, url):
+        """
+        Returns True for url's which failed to respond with increasing probability.
+        Returns False for url's which did not fail.
+        """
+        return randrange(self._timeout_count[url] + 1) != 0
 
     def get_entity(self, entity_name):
         '''
@@ -54,15 +68,23 @@ class ERSReadOnly(object):
                 entity.add_document(doc, source)
          
         # Get documents out of public/cache of connected peers
+        # TODO parallelize 
         for peer in self.get_peers():
+            url = peer['server_url']
+            if self._is_failing(url):
+                continue
+
             remote_docs = []
             try:
-                remote_store = store.RemoteStore(peer['server_url'])
-                remote_docs.extend(remote_store.docs_by_entity(entity_name))
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}\n".format(peer))
-                continue
+                remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
+            except TimeoutError:
+                self._timeout_count[url] += 1
+                sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                    url, self._timeout_count[url]))
+            except Exception as e:
+                sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
             else:
+                self._timeout_count.pop(url, 0)
                 for doc in remote_docs:
                     entity.add_document(doc, 'remote')
         return entity
@@ -81,13 +103,21 @@ class ERSReadOnly(object):
 
         # Search peers
         for peer in self.get_peers():
+            url = peer['server_url']
+            if self._is_failing(url):
+                continue
+
             remote_result = []
             try:
-                remote_store = store.RemoteStore(peer['server_url'])
-                remote_result = set(remote_store.by_property_value(prop, value))
-            except:
-                sys.stderr.write("Warning: failed to query remote peer {0}\n".format(peer))
+                remote_result = store.query_remote(url, 'by_property_value', prop, value)
+            except TimeoutError:
+                self._timeout_count[url] += 1
+                sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                    url, self._timeout_count[url]))
+            except Exception as e:
+                sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
             else:
+                self._timeout_count.pop(url, 0)
                 result.update(remote_result)
 
         return list(result)
