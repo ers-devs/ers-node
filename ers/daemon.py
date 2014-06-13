@@ -70,8 +70,7 @@ class ERSDaemon(object):
     # List of bridges
     _bridges = None
 
-    def __init__(self, peer_type=ERS_DEFAULT_PEER_TYPE, port=5984, dbname=ERS_DEFAULT_DBNAME,
-                 pidfile='/var/run/ers_daemon.pid', tries=10, logger=None):
+    def __init__(self, peer_type, port, dbname, pidfile, tries, logger):
         self.peer_type = peer_type
         self.port = port
         self.dbname = dbname
@@ -274,11 +273,11 @@ def run():
     parser.add_argument("-t", "--type", help="Type of instance", type=str, default=ERS_DEFAULT_PEER_TYPE,
                         choices=ERS_PEER_TYPES)
     parser.add_argument("--pidfile", help="PID file for this ERS daemon instance (or 'none')",
-                        type=str, default='/var/run/ers_daemon.pid')
+                        type=str, default='/var/run/ers/daemon.pid')
     parser.add_argument("--tries", help="Number of tries to connect to CouchDB", type=int, default=10)
     parser.add_argument("--logtype", help="The log type (own file vs. syslog)", type=str, default='file',
                         choices=['file', 'syslog'])
-    parser.add_argument("--logfile", help="The log file to use", type=str, default='/var/log/ers_daemon.log')
+    parser.add_argument("--logfile", help="The log file to use", type=str, default='/var/log/ers/daemon.log')
     parser.add_argument("--loglevel", help="Log messages of this level and above", type=str, default='info',
                         choices=LOG_LEVELS)
     args = parser.parse_args()

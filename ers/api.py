@@ -4,7 +4,6 @@ ers.api
 Provides class ERS implementing API to Entity Registry System.
 
 """
-import re
 import sys
 
 from hashlib import md5
@@ -192,51 +191,34 @@ class ERS(ERSReadOnly):
         """
         return self.store.public.delete_entity(entity_name)
 
-    ## Never used so far, consider moving to Entity()
-    # def delete_value(self, entity, prop):
-    #     """ Delete all of the peer's values for a property in an entity.
-        
-    #         :param entity: entity to delete for
-    #         :type entity: str.
-    #         :param prop: property to delete for
-    #         :type prop: str.
-    #         :param graph: graph to delete from
-    #         :type graph: str.
-    #         :returns: success status
-    #         :rtype: bool.
-    #     """
-    #     docs = [r['doc'] for r in self.store.public.view('index/by_entity',
-    #         key=entity, include_docs=True)]
-    #     for doc in docs:
-    #         self.model.delete_property(doc, prop)
-    #     return self.store.public.save_docs(docs)        
-
     def create_entity(self, entity_name):
         '''
-        Create a new entity, return it and store in as a new document in the public store
+        Create a new entity
         '''
-        # Create a new document
-        document =  {
-                        '@id' : entity_name,
-                        '@owner' : self.host_urn
-                    }
-        self.store.public.save_doc(document)
-        
-        # Create the entity
-        entity = Entity(entity_name)
-        entity.add_document(document, 'public')
-         
-        # Return the entity
-        return entity
+        # Create and return the entity
+        return Entity(entity_name)
 
     def persist_entity(self, entity):
         '''
-        Save an updated entity
+        Persist the description of an entity in the private and public stores
         '''
-        for doc in entity.get_documents():
-            if doc['source'] == 'public':
-                self.store.public.save_doc(doc['document'])
+        for scope in ['public', 'private']:
+            document = entity.get_documents(scope)
+            
+            # Skip the document if empty or not right scope
+            if entity.get_documents(scope) == None:
+                continue
+            
+            # Update the author, last modif date and other meta-data
+            if '@owner' not in document:
+                document['@owner'] = self.host_urn
 
+            # Write the document
+            if scope == 'public':
+                self.store.public.save_doc(document)
+            elif scope == 'private':
+                self.store.private.save_doc(document)
+                
     def cache_entity(self, entity):
         '''
         Place an entity in the cache. This mark the entity as being
@@ -246,12 +228,12 @@ class ERS(ERSReadOnly):
         @param entity An entity object
         '''
         # No point in caching it again
-        if self.is_cached(entity.get_name()):
+        if self.is_cached(entity.get_entity_name()):
             return
         
         # Save all its current documents in the cache
-        for doc in entity.get_raw_documents():
-            self.store.cache.save_doc(doc)
+        for document in entity.get_documents('remote'):
+            self.store.cache.save_doc(document)
 
     def delete_from_cache(self, entity_name):
         """ Delete an entity from the cache.
@@ -269,88 +251,110 @@ class Entity():
     An entity description is contained in various CouchDB documents
     '''
     def __init__(self, entity_name):
-        # Save the name
+        # Name of the entity
         self._entity_name = entity_name
         
-        # Create an empty list of documents
-        self._documents = []
+        # List of documents, there can be one private, one public and several 
+        # coming from the cache or from other peers
+        self._documents = {
+            'public' : None, 
+            'private' : None,
+            'remote' : [],
+            'cache' : []
+        }
         
-    def add_document(self, document, source):
-        '''
-        Add a document to the list of documents that compose this entity
-        '''
-        self._documents.append({'document': document, 'source': source})
-            
-    def add_property(self, prop, value):
+    def add_property_value(self, prop, value, private=False):
         '''
         Add a property to the description of the entity
-        TODO: we can only edit the local or private documents
         '''
-        document = None
-        for doc in self._documents:
-            if doc['source'] == 'public':
-                document = doc['document']
-        if document == None:
-            return
-        if prop not in document:
-            document[prop] = []
-        document[prop].append(value)
-    
-    def delete_property(self, prop, value):
+        # Set the scope to write in the right document
+        scope = 'private' if private else 'public'
+        
+        # If the document does not exist yet we need to create it
+        if self._documents[scope] == None:
+            self._documents[scope] =  {'@id' : self._entity_name}
+            
+        # Add the value to those associated to this property
+        if prop not in self._documents[scope]:
+            self._documents[scope][prop] = []
+        self._documents[scope][prop].append(value)
+        
+    def set_property_value(self, prop, value, private=False):
         '''
-        Delete a property to the description of the entity
-        TODO: we can only edit the local or private documents
+        Set a property/value pair for the description of the entity
         '''
-        document = None
-        for doc in self._documents:
-            if doc['source'] == 'public':
-                document = doc['document']
-        if document == None or prop not in document:
-            return
-        document[prop] = [v for v in document[prop] if v != value]
+        # Set the scope to write in the right document
+        scope = 'private' if private else 'public'
+        
+        # Delete all previous association to that property
+        self.delete_property(prop, None)
+        
+        # If the document does not exist yet we need to create it
+        if self._documents[scope] == None:
+            self._documents[scope] =  {'@id' : self._entity_name}
+            
+        # Add the value to those associated to this property
+        self._documents[scope][prop] = [value]
+        
+    def delete_property(self, prop, value=None):
+        '''
+        Delete a property from the description of the entity
+        '''
+        # We delete the property from the public and private documents
+        for scope in ['public', 'private']:
+            if self._documents[scope] != None and prop in self._documents[scope]:
+                # If a value is specified delete only this value, otherwise
+                # remove the key completely
+                if value == None:
+                    del self._documents[scope][prop]
+                else:
+                    self._documents[scope][prop].pop(value, None)
 
     def get_properties(self):
         '''
         Get the aggregated properties out of all the individual documents
+        TODO additional parameters (filter='public', flatten=False)
         '''
-        # TODO Lasy eval, additional params (filter='public', flatten=False)
-        # Returns: dict
         result = {}
-        for doc in self._documents:
-            for key, value in doc['document'].iteritems():
+
+        # Set the documents to pick data from
+        documents = []
+        documents.append(self._documents['private'])
+        documents.append(self._documents['public'])
+        documents.append(self._documents['cache'].values())
+        documents.append(self._documents['remote'].values())
+                
+        # Add properties from the target documents
+        for document in documents:
+            for key, values in document.iteritems():
                 if key[0] != '_' and key[0] != '@':
-                    if key not in result:
-                        result[key] = []
-                    for v in value:
-                        result[key].append(v)
+                    result.setdefault(key, set())
+                    for value in values:
+                        result[key].append(value)
+                        
         return result
-        
-    def get_documents(self):
-        '''
-        Return all the documents associated to this entity and their source
-        '''
-        return self._documents
     
-    def get_documents_ids(self):
+    def add_document(self, document, scope):
         '''
-        Get the identifiers of all the documents associated to the entity
+        Add a new document to the list of documents that compose this entity
         '''
-        results = []
-        for doc in self._documents:
-            results.append(doc['document']['_id'])
-        return results
-         
-    def get_raw_documents(self):
+        if scope == 'public' or scope == 'private':
+            self._documents[scope] = document 
+        elif scope == 'cache':
+            self._documents[scope].append(document)
+        elif scope == 'remote':
+            # TODO check that we don't append twice the same document
+            self._documents[scope].append(document) 
+            
+    def get_documents(self, scope):
         '''
-        Get the content of all the documents associated to the entity
+        Return all the documents associated to this entity
         '''
-        results = []
-        for doc in self._documents:
-            results.append(doc['document'])
-        return results
+        return self._documents[scope]
     
-    def get_name(self):
+    def get_entity_name(self):
         '''
+        Get the name of the entity
         @return the name of that entity
         '''
         return self._entity_name
