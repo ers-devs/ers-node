@@ -7,3 +7,5 @@ couch/couchdata/*
 
 .DS_Store
 .idea/
+.project
+.pydevproject
