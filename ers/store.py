@@ -90,12 +90,15 @@ class ERSDatabase(couchdbkit.Database):
         return self.view('index/by_entity', key=entity_name).first() is not None
 
     def by_property(self, prop):
+        # TODO add offset and limit
         return self.view('index/by_property_value',
                         startkey=[prop],
                         endkey=[prop, {}],
                         wrapper = lambda r: r['value'])
 
     def by_property_value(self, prop, value=None):
+        # TODO add offset and limit
+        # TODO add detect * + replace next char
         if value is None:
             return self.by_property(prop)
         return self.view('index/by_property_value',
