@@ -1,9 +1,11 @@
+#!/usr/bin/python
+
 """
 ers.daemon
 
 Publishes ERS service, monitors ERS peers, manages peer-to-peer replications.
 
-If a bridge is present in the network the daemon initiates continuos
+If a bridge is present in the network the daemon initiates continuous
 replication from the local public store to the database advertised by the
 bridge. The daemon also makes a single attempt to get a newer
 version of documents in the local cache store when a new peer is
@@ -17,14 +19,16 @@ import signal
 import socket
 import sys
 import time
-import logging
 import logging.handlers
 
-import gobject
+import tornado.ioloop
+import tornado.web
+
 import restkit
 
 import zeroconf
 from store import ServiceStore
+from tornado import web, ioloop
 
 ERS_AVAHI_SERVICE_TYPE = '_ers._tcp'
 
@@ -234,6 +238,13 @@ class ERSDaemon(object):
             raise RuntimeError("The ERS daemon seems to be already running. If this is not the case, " +
                                "delete " + self.pidfile + " and try again.")
 
+
+class WebAPIHandler(web.RequestHandler):
+    def get(self):
+        self.write("Hello, world")
+
+    
+    
 LOG_LEVELS = ['debug', 'info', 'warning', 'error', 'critical']
 
 
@@ -296,11 +307,20 @@ def run():
         signal.signal(signal.SIGQUIT, sig_handler)
         signal.signal(signal.SIGTERM, sig_handler)
 
-        mainloop = gobject.MainLoop()
-        mainloop.run()
+        # Initialise the web interface handler
+        application = web.Application([
+            (r"/api/(.*)", WebAPIHandler),
+            (r"/(.*)", web.StaticFileHandler, {'path': 'www', 'default_filename' : 'index.html'}),
+        ])
+        application.listen(8888, address="127.0.0.1")
+
+        # Start the main loop
+        mainloop = ioloop.IOLoop.instance()
+        mainloop.start()
+        
     except (KeyboardInterrupt, SystemExit):
         if mainloop is not None:
-            mainloop.quit()
+            mainloop.stop()
     except RuntimeError as e:
         logger.critical(str(e))
         failed = True
