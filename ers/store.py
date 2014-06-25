@@ -28,10 +28,12 @@ import restkit
 from functools import partial
 from itertools import chain
 from timeout import timeout
+import logging
 
 REMOTE_SERVER_TIMEOUT = 0.3
 
 DEFAULT_STORE_URI = 'http://127.0.0.1:5984'
+DEFAULT_STORE_ADMIN_URI = 'http://admin:admin@127.0.0.1:5984'
 DEFAULT_AUTH = ['admin', 'admin']
 
 LOCAL_DBS = ['public', 'private', 'cache']
@@ -121,6 +123,7 @@ class ERSDatabase(couchdbkit.Database):
 class Store(couchdbkit.Server):
     """ERS store"""
     def __init__(self, uri, databases, **client_opts):
+        self.logger = logging.getLogger('ers-store')
         self.db_names = dict([(db, db_name(db)) for db in databases])
         super(Store, self).__init__(uri, **client_opts)
         for method_name in ('docs_by_entity', 'by_property', 'by_property_value'):
@@ -164,13 +167,12 @@ class LocalStore(Store):
     def __init__(self, uri=DEFAULT_STORE_URI, databases=LOCAL_DBS, **client_opts):
         super(LocalStore, self).__init__(uri=uri, databases=databases, **client_opts)
         self.repair()
-
+        
     def repair(self, auth=DEFAULT_AUTH):
         # Authenticate with the local store
-        user, password = auth
-        server = couchdbkit.Server( uri=DEFAULT_STORE_URI,
-                                    filters=[restkit.BasicAuth(user, password)])
-
+        #user, password = auth
+        server = couchdbkit.Server(uri=DEFAULT_STORE_ADMIN_URI)
+        
         for dbname in self.all_dbs():
             # Recreate database if needed
             db = server.get_or_create_db(dbname)

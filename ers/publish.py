@@ -37,19 +37,11 @@ program killed
 __author__ = 'Teodor Macicas'
 
 
-import sys
-import random
-import couchdbkit
-import couchdbkit.changes
-import rdflib
-import json
 import time
 import os.path
 import requests
 
 from threading import Thread
-from time import sleep 
-from collections import defaultdict
 from couchdbkit.changes import ChangesStream
 from string import Template
 

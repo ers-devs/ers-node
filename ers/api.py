@@ -151,6 +151,7 @@ class ERSReadOnly(object):
     def is_cached(self, entity_name):
         '''
         Check if an entity exists in the cache
+        FIXME Check if *all* the remote documents are in the cache store
         '''
         return self.store.cache.entity_exist(entity_name)
 
