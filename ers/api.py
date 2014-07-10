@@ -55,7 +55,7 @@ class ERSReadOnly(object):
         """
         return randrange(self._timeout_count[url] + 1) != 0
 
-    def get_entity(self, entity_name):
+    def get_entity(self, entity_name, local=False):
         '''
         Create an entity object, fill it will all the relevant documents
         '''
@@ -71,24 +71,26 @@ class ERSReadOnly(object):
          
         # Get documents out of public/cache of connected peers
         # TODO parallelize 
-        for peer in self.get_peers():
-            url = peer['server_url']
-            if self._is_failing(url):
-                continue
-
-            remote_docs = []
-            try:
-                remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
-            except TimeoutError:
-                self._timeout_count[url] += 1
-                sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
-                    url, self._timeout_count[url]))
-            except Exception as e:
-                sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
-            else:
-                self._timeout_count.pop(url, 0)
-                for doc in remote_docs:
-                    entity.add_document(doc, 'remote')
+        if not local:
+            for peer in self.get_peers():
+                url = peer['server_url']
+                if self._is_failing(url):
+                    continue
+    
+                remote_docs = []
+                try:
+                    remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
+                except TimeoutError:
+                    self._timeout_count[url] += 1
+                    sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                        url, self._timeout_count[url]))
+                except Exception as e:
+                    sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
+                else:
+                    self._timeout_count.pop(url, 0)
+                    for doc in remote_docs:
+                        entity.add_document(doc, 'remote')
+        
         return entity
 
     def search(self, prop, value=None):
@@ -206,7 +208,7 @@ class ERS(ERSReadOnly):
             document = entity.get_documents(scope)
             
             # Skip the document if empty or not right scope
-            if entity.get_documents(scope) == None:
+            if document == None:
                 continue
             
             # Update the author, last modif date and other meta-data
