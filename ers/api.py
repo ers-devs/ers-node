@@ -14,6 +14,9 @@ from random import randrange
 import store
 from timeout import TimeoutError
 
+import binascii
+import dbus
+
 class ERSReadOnly(object):
     """ ERS version with read-only methods.
     
@@ -52,7 +55,7 @@ class ERSReadOnly(object):
         """
         return randrange(self._timeout_count[url] + 1) != 0
 
-    def get_entity(self, entity_name):
+    def get_entity(self, entity_name, local=False):
         '''
         Create an entity object, fill it will all the relevant documents
         '''
@@ -68,24 +71,26 @@ class ERSReadOnly(object):
          
         # Get documents out of public/cache of connected peers
         # TODO parallelize 
-        for peer in self.get_peers():
-            url = peer['server_url']
-            if self._is_failing(url):
-                continue
-
-            remote_docs = []
-            try:
-                remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
-            except TimeoutError:
-                self._timeout_count[url] += 1
-                sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
-                    url, self._timeout_count[url]))
-            except Exception as e:
-                sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
-            else:
-                self._timeout_count.pop(url, 0)
-                for doc in remote_docs:
-                    entity.add_document(doc, 'remote')
+        if not local:
+            for peer in self.get_peers():
+                url = peer['server_url']
+                if self._is_failing(url):
+                    continue
+    
+                remote_docs = []
+                try:
+                    remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
+                except TimeoutError:
+                    self._timeout_count[url] += 1
+                    sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                        url, self._timeout_count[url]))
+                except Exception as e:
+                    sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
+                else:
+                    self._timeout_count.pop(url, 0)
+                    for doc in remote_docs:
+                        entity.add_document(doc, 'remote')
+        
         return entity
 
     def search(self, prop, value=None):
@@ -128,7 +133,7 @@ class ERSReadOnly(object):
             :type subject: str
             :rtype: bool
         """
-        return any([getattr(self.store, db).exist(entity_name)
+        return any([getattr(self.store, db).entity_exist(entity_name)
             for db in self.store.db_names])
 
     def get_peers(self):
@@ -151,16 +156,10 @@ class ERSReadOnly(object):
     def is_cached(self, entity_name):
         '''
         Check if an entity exists in the cache
+        FIXME Check if *all* the remote documents are in the cache store
         '''
         return self.store.cache.entity_exist(entity_name)
 
-    def contains_entity(self, entity_name):
-        """
-        Check if the entity exists in the public store
-        """
-        # QUESTION Other dbs?
-        return self.store.public.entity_exist(entity_name)
-        
 class ERS(ERSReadOnly):
     """ The read-write local class for an ERS peer.
     
@@ -180,7 +179,7 @@ class ERS(ERSReadOnly):
         super(ERS, self).__init__(fixed_peers, local_only)
 
     def delete_entity(self, entity_name):
-        """ Delete an entity from the public store.
+        """ Delete an entity from the public and private stores.
         
             :param entity: entity to delete
             :type entity: str.
@@ -189,7 +188,10 @@ class ERS(ERSReadOnly):
             :returns: success status
             :rtype: bool.
         """
-        return self.store.public.delete_entity(entity_name)
+        status = True
+        status = status and self.store.public.delete_entity(entity_name)
+        status = status and self.store.private.delete_entity(entity_name)
+        return status
 
     def create_entity(self, entity_name):
         '''
@@ -206,7 +208,7 @@ class ERS(ERSReadOnly):
             document = entity.get_documents(scope)
             
             # Skip the document if empty or not right scope
-            if entity.get_documents(scope) == None:
+            if document == None:
                 continue
             
             # Update the author, last modif date and other meta-data
@@ -263,6 +265,20 @@ class Entity():
             'cache' : []
         }
         
+    def _encode_value(self, value):
+        encoded_value = value
+        encoded_type = None
+        if isinstance(value, dbus.ByteArray):
+            encoded_value = binascii.hexlify(value)
+            encoded_type = "xsd:hexBinary"
+        return (encoded_value, encoded_type)
+
+    def _decode_value(self, encoded_value, encoded_type):
+        value = encoded_value
+        if encoded_type == 'xsd:hexBinary':
+            value = dbus.ByteArray(binascii.unhexlify(encoded_value))
+        return value
+
     def add_property_value(self, prop, value, private=False):
         '''
         Add a property to the description of the entity
@@ -273,12 +289,24 @@ class Entity():
         # If the document does not exist yet we need to create it
         if self._documents[scope] == None:
             self._documents[scope] =  {'@id' : self._entity_name}
+        
+        # Encode the value    
+        (v,t) = self._encode_value(value)
+        if t != None:
+            # Add the type to the context
+            self._documents[scope].setdefault('@context', {})
+            self._documents[scope]['@context'][prop] = {}
+            self._documents[scope]['@context'][prop]['@type'] = t
             
         # Add the value to those associated to this property
         if prop not in self._documents[scope]:
-            self._documents[scope][prop] = []
-        self._documents[scope][prop].append(value)
-        
+            self._documents[scope][prop] = v
+        else:
+            if not isinstance(self._documents[scope][prop], list):
+                self._documents[scope][prop] = [self._documents[scope][prop]]
+            # Append the value
+            self._documents[scope][prop].append(v)
+                                               
     def set_property_value(self, prop, value, private=False):
         '''
         Set a property/value pair for the description of the entity
@@ -292,9 +320,18 @@ class Entity():
         # If the document does not exist yet we need to create it
         if self._documents[scope] == None:
             self._documents[scope] =  {'@id' : self._entity_name}
-            
-        # Add the value to those associated to this property
-        self._documents[scope][prop] = [value]
+        
+        # Encode the value                
+        (v,t) = self._encode_value(value)
+        
+        # Add the type to the context
+        if t != None:
+            self._documents[scope].setdefault('@context', {})
+            self._documents[scope]['@context'][prop] = {}
+            self._documents[scope]['@context'][prop]['@type'] = t
+        
+        # Set the value
+        self._documents[scope][prop] = v
         
     def delete_property(self, prop, value=None):
         '''
@@ -308,8 +345,16 @@ class Entity():
                 if value == None:
                     del self._documents[scope][prop]
                 else:
-                    self._documents[scope][prop].pop(value, None)
-
+                    if isinstance(self._documents[scope][prop], list):
+                        if value in self._documents[scope][prop]:
+                            self._documents[scope][prop].pop(value, None)
+                            if len(self._documents[scope][prop]) == 1:
+                                value = self._documents[scope][prop][0]
+                                self._documents[scope][prop] = value
+                    else:
+                        if self._documents[scope][prop] == value:
+                            del self._documents[scope][prop]
+                        
     def get_properties(self):
         '''
         Get the aggregated properties out of all the individual documents
@@ -321,17 +366,42 @@ class Entity():
         documents = []
         documents.append(self._documents['private'])
         documents.append(self._documents['public'])
-        documents.append(self._documents['cache'].values())
-        documents.append(self._documents['remote'].values())
+        for d in self._documents['cache']:
+            documents.append(d)
+        for d in self._documents['remote']:
+            documents.append(d)
                 
         # Add properties from the target documents
         for document in documents:
+            if document == None:
+                continue
             for key, values in document.iteritems():
-                if key[0] != '_' and key[0] != '@':
-                    result.setdefault(key, set())
+                # Don't return meta-elements
+                if key[0] == '_' or key[0] == '@':
+                    continue
+                # Get the type of that key if known
+                t = None
+                if '@context' in document:
+                    if key in document['@context']:
+                        t = document['@context'][key]['@type']
+                # Decode the values
+                v = None
+                if isinstance(values, list):
+                    v = []
                     for value in values:
-                        result[key].append(value)
-                        
+                        v.append(self._decode_value(value, t))
+                else:
+                    v = self._decode_value(values, t)
+                # Store the result
+                if key in result:
+                    if not isinstance(result[key], list):
+                        result[key] = [result[key]]
+                    for value in values:
+                        if v not in result[key]:
+                            result[key].append(v)
+                else:
+                    result[key]=v
+        
         return result
     
     def add_document(self, document, scope):
