@@ -17,22 +17,27 @@ def test():
         assert ers.store.public.doc_exist('_design/index')
         assert ers.store.public.doc_exist('_local/state')
 
-        def add_triple(subj, prop, val):
+        def add_triple(subj, prop, val, private=False):
             e = ers.create_entity(subj)
-            e.add_property(prop, val)
+            e.add_property_value(prop, val, private)
             ers.persist_entity(e)
             return e
 
+        
         add_triple(s, p, v)
         add_triple(s2, p, v)
+        add_triple(s2, p, v+'private', True)
         assert ers.contains_entity(s) == True
         ers.delete_entity(s)
         assert ers.contains_entity(s) == False
         assert ers.contains_entity(s2) == True
         assert ers.is_cached(s2) == False
-        e = ers.get_entity(s2)
-        ers.cache_entity(e)
-        assert ers.is_cached(s2) == True
+        
+        # Need to have some peers to test this
+        #e = ers.get_entity(s2)
+        #ers.cache_entity(e)
+        #assert ers.is_cached(s2) == True
+        
         # for o in objects:
         #     ers.add_data(s, p, o, g)
         #     ers.add_data(s, p2, o, g)
