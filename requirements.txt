@@ -1,3 +1,5 @@
 couchdbkit
 rdflib
 requests
+dbus-python
+
