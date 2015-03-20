@@ -16,6 +16,7 @@ from timeout import TimeoutError
 
 import binascii
 import dbus
+from ers.store import OWN_DBS, ERS_PUBLIC_DB, ERS_PRIVATE_DB
 
 class ERSReadOnly(object):
     """ ERS version with read-only methods.
@@ -31,7 +32,7 @@ class ERSReadOnly(object):
         self._local_only = local_only
         self.fixed_peers = [] if self._local_only else list(fixed_peers)
         self._timeout_count = Counter()
-        self.store = store.LocalStore()
+        self.store = store.Store()
         self._init_host_urn()
 
     def _init_host_urn(self):
@@ -133,8 +134,8 @@ class ERSReadOnly(object):
             :type subject: str
             :rtype: bool
         """
-        return any([getattr(self.store, db).entity_exist(entity_name)
-            for db in self.store.db_names])
+        return any([self.store[db].entity_exist(entity_name)
+            for db in OWN_DBS])
 
     def get_peers(self):
         """ Get the known peers.
@@ -146,7 +147,7 @@ class ERSReadOnly(object):
 
         result = [{'server_url': server_url} for server_url in self.fixed_peers] 
 
-        state_doc = self.store.public.open_doc('_local/state')
+        state_doc = self.store[ERS_PUBLIC_DB]['_local/state']
         for peer in state_doc['peers']:
             result.append({
                 'server_url': r'http://' + peer['ip'] + ':' + str(peer['port']) + '/',
@@ -217,9 +218,9 @@ class ERS(ERSReadOnly):
 
             # Write the document
             if scope == 'public':
-                self.store.public.save_doc(document)
+                self.store[ERS_PUBLIC_DB].save(document)
             elif scope == 'private':
-                self.store.private.save_doc(document)
+                self.store[ERS_PRIVATE_DB].save(document)
                 
     def cache_entity(self, entity):
         '''

@@ -20,7 +20,6 @@ import socket
 import sys
 import time
 import logging.handlers
-import restkit
 import zeroconf
 
 from store import ServiceStore
@@ -29,6 +28,7 @@ from defaults import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPE_BRIDGE, ERS_PEER_TYPE
 from defaults import set_logging
 import gobject
 from zeroconf import ERSPeerInfo
+from ers.store import ERS_PUBLIC_DB
 
 log = logging.getLogger('ers')
 
@@ -128,8 +128,11 @@ class ERSDaemon(object):
         """
         log.info("Starting ERS daemon")
         self._check_already_running()
+        
+        log.debug("Initialise CouchDB")        
         self._init_db_connection()
 
+        log.debug("Publish service on ZeroConf")
         service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname(), self.prefix, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
         self._service.publish()
@@ -147,12 +150,13 @@ class ERSDaemon(object):
         log.info("ERS daemon started")
         
     def _init_db_connection(self):
+        log.debug("Initialise databases")
         for i in range(self.tries):  # @UnusedVariable
             try:
                 self._store = ServiceStore()
                 return
-            except restkit.RequestError:
-                time.sleep(1)
+            #except restkit.RequestError:
+            #    time.sleep(1)
             except Exception as e:
                 raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
         raise RuntimeError("Error connecting to CouchDB. Please make sure CouchDB is running.")
@@ -231,7 +235,8 @@ class ERSDaemon(object):
         self._update_replication_links()
 
     def _update_peers_in_couchdb(self):
-        state_doc = self._store.public.open_doc('_local/state')
+        log.debug("Update peers in CouchDB")
+        state_doc = self._store[ERS_PUBLIC_DB]['_local/state']
 
         # If there are bridges, do not record other peers in the state_doc.
         visible_peers = None
@@ -240,7 +245,7 @@ class ERSDaemon(object):
         else:
             visible_peers = self._peers[ERS_PEER_TYPE_CONTRIB]
         state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
-        self._store.public.save_doc(state_doc)
+        self._store[ERS_PUBLIC_DB].save(state_doc)
 
     def _update_replication_links(self):
         '''
@@ -326,6 +331,7 @@ class ERSDaemon(object):
                 self._store.replicator.save_doc(repl_doc)
 
     def _check_already_running(self):
+        log.debug("Check if already running")
         if self.pidfile is not None and os.path.exists(self.pidfile):
             raise RuntimeError("The ERS daemon seems to be already running. If this is not the case, " +
                                "delete " + self.pidfile + " and try again.")
