@@ -142,7 +142,11 @@ class Store(object):
     def __init__(self, url=DEFAULT_STORE_ADMIN_URI, **client_opts):
         self.logger = logging.getLogger('ers-store')
         self._server = Server(url=url, **client_opts)
-
+        
+        self.db_names = {'public': ERS_PUBLIC_DB,
+                'private': ERS_PRIVATE_DB,
+                'cache': ERS_CACHE_DB}
+        
         # Add aggregate functions        
         # for method_name in ('docs_by_entity', 'by_property', 'by_property_value'):
         #    self.add_aggregate(method_name)
