@@ -11,15 +11,15 @@ branches:
   only:
     - develop
     - master
-    - feature/refactoring
 
 before_install:
 
 install:
-    - pip install -r requirements.txt --use-mirrors
+    - pip install -r requirements.txt
     - python setup.py install
 
 before_script:
     - curl -X PUT http://127.0.0.1:5984/_config/admins/admin -d '"admin"'
+    - apt-get install python-dbus
 
 script: python tests/test_ers.py
