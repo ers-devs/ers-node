@@ -175,6 +175,14 @@ class Store(object):
         aggregate.__name__ = method_name
         setattr(cls, method_name, aggregate)
  
+    def reset(self):
+        for db_name in ALL_DBS:
+            try:
+                del self._server[db_name]
+            except http.ResourceNotFound:
+                pass
+        self._repair()
+            
     def by_property_value(self, property, value=None):
         results = []
         for db in self._ers_dbs.itervalues():
