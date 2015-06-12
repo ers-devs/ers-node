@@ -167,15 +167,8 @@ class ERS(ERSReadOnly):
         :type fixed_peers: tuple
         :param local_only: if True ERS will not attempt to connect to remote peers
         :type local_only: bool
-        :param reset_store: whether or not to reset the CouchDB database on the given server
-        :type reset_database: bool
     """
-    def __init__(self,
-                 fixed_peers=(),
-                 local_only=False,
-                 reset_database=False):
-        if reset_database:
-            store.reset_local_store()
+    def __init__(self, fixed_peers=(), local_only=False):
         super(ERS, self).__init__(fixed_peers, local_only)
 
     def reset(self):
@@ -246,13 +239,30 @@ class ERS(ERSReadOnly):
         return self.store.cache.delete_entity(entity_name)
 
 class Document():
+    '''
+    Example document representing partial data about 
+    entity<http://www.w3.org/People/Berners-Lee/card#i>:
+    
+    {
+        "_id": "3d00b0cc1ea95dbaa806dbf5b96c4d5b",
+        "_rev": "1-e004c4ac4b5f7923892ad417d364a85e",
+        "@id: "http://www.w3.org/People/Berners-Lee/card#i",
+        "@owner : "urn:ers:host:a1fd2202aa76693d3e74ba657ce932f0",
+        "http://www.w3.org/2000/01/rdf-schema#label": [
+           "Tim Berners-Lee"
+        ],
+        "http://xmlns.com/foaf/0.1/nick": [
+           "TimBL",
+           "timbl"
+        ]
+    }
+    '''
     def __init__(self, uri):
         self._doc = {'@id' : uri}
-        pass
     
     def add(self, predicate, value):
         # Encode the value    
-        (v,t) = self._encode_value(value)
+        (v, t) = self._encode_value(value)
         if t != None:
             # Add the type to the context
             self._doc.setdefault('@context', {})
@@ -268,7 +278,7 @@ class Document():
             # Append the value
             self._doc[predicate].append(v)
     
-    def delete(self, predicate, value = None):
+    def delete(self, predicate, value=None):
         '''
         Remove a predicate and its associated values
         '''
@@ -281,18 +291,17 @@ class Document():
             del self._doc[predicate]
             return
         
-        # return if the asked value is not there
-        if isinstance(self._doc[predicate], list) and value not in self._doc[predicate]:
-            return
-        
-        # return if the only value is not the right one
-        if self._doc[predicate] != value:
-            return
-        
-        self._doc[predicate].remove(value)
+        # Remove the specific value if found
+        if isinstance(self._doc[predicate], list):
+            self._doc[predicate].remove(value)
+        else:
+            if self._doc[predicate] == value:
+                del self._doc[predicate]
+                
         # If there is no more value associated remove the predicate
         if len(self._doc[predicate]) == 0:
             del self._doc[predicate]
+
         # If there is only one value flatten the list
         if len(self._doc[predicate]) == 1:
             self._doc[predicate] = self._doc[predicate][0]
@@ -356,7 +365,7 @@ class Entity():
         # List of documents, there can be one private, one public and several 
         # coming from the cache or from other peers
         self._documents = {
-            'public' : None, 
+            'public' : None,
             'private' : None,
             'remote' : [],
             'cache' : []
@@ -399,26 +408,17 @@ class Entity():
         '''
         results = []
 
-        # Set the documents to pick data from
-        documents = []
-        documents.append(self._documents['private'])
-        documents.append(self._documents['public'])
-        for d in self._documents['cache']:
-            documents.append(d)
-        for d in self._documents['remote']:
-            documents.append(d)
-                
         # Add properties from the target documents
         for (scope, documents) in self._documents.iteritems():
             if documents == None:
                 continue
             if isinstance(documents, list):
                 for document in documents:
-                    for (p,o) in document.to_tuples():
-                        results.append((p,o,scope))
+                    for (p, o) in document.to_tuples():
+                        results.append((p, o, scope))
             else:
-                for (p,o) in documents.to_tuples():
-                    results.append((p,o,scope))
+                for (p, o) in documents.to_tuples():
+                    results.append((p, o, scope))
                 
         
         return results

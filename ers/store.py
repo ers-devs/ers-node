@@ -1,24 +1,7 @@
 """ 
 ers.store
 
-Routines for interaction with CouchDB. 
-
-Example CouchDB document representing partial data about 
-entity<http://www.w3.org/People/Berners-Lee/card#i>:
-
-{
-    "_id": "3d00b0cc1ea95dbaa806dbf5b96c4d5b",
-    "_rev": "1-e004c4ac4b5f7923892ad417d364a85e",
-    "@id: "http://www.w3.org/People/Berners-Lee/card#i",
-    "@owner : "urn:ers:host:a1fd2202aa76693d3e74ba657ce932f0",
-    "http://www.w3.org/2000/01/rdf-schema#label": [
-       "Tim Berners-Lee"
-    ],
-    "http://xmlns.com/foaf/0.1/nick": [
-       "TimBL",
-       "timbl"
-    ]
-}
+Routines for interaction with CouchDB.
 
 """
 # http://stackoverflow.com/questions/1776434/couchdb-python-and-authentication
@@ -265,17 +248,3 @@ def query_remote(uri, method_name, *args, **kwargs):
     # import ipdb; ipdb.set_trace()
     remote_store = RemoteStore(uri)
     return list(getattr(remote_store, method_name)(*args, **kwargs))
-
-def reset_local_store(auth=DEFAULT_AUTH):
-    user, password = auth
-    store = Store(filters=[restkit.BasicAuth(user, password)])
-
-    # Delete ERS databases
-    for dbname in store.all_dbs():
-        try:
-            store.delete_db(dbname)
-        except couchdbkit.ResourceNotFound:
-            pass
-
-    # Create ERS databases
-    store.repair(auth)
