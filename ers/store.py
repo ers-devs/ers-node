@@ -35,6 +35,7 @@ def index_doc():
             "by_entity": {
                 "map": "function(doc) {if ('@id' in doc) {emit(doc['@id'], {'rev': doc._rev, 'g': doc._id})}}"
             },
+
             "by_property_value": {
                 "map": """
                     function(doc) {
@@ -42,9 +43,14 @@ def index_doc():
                             var entity = doc['@id'];
                             for (property in doc) {
                                 if (property[0] != '_' && property[0] != '@') {
-                                    doc[property].forEach(
-                                      function(value) {emit([property, value], entity)}
-                                    );
+                                    var values = doc[property];
+                                    if (values instanceof Array) {
+                                        doc[property].forEach(
+                                            function(value) {emit([property, value], entity);}
+                                        )
+                                    } else {
+                                        emit([property, doc[property]], entity);
+                                    }
                                 }
                             }
                         }
@@ -245,6 +251,5 @@ RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT
 
 @timeout(REMOTE_SERVER_TIMEOUT)
 def query_remote(uri, method_name, *args, **kwargs):
-    # import ipdb; ipdb.set_trace()
     remote_store = RemoteStore(uri)
     return list(getattr(remote_store, method_name)(*args, **kwargs))
