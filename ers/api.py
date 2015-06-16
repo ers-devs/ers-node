@@ -20,7 +20,7 @@ from ers.store import OWN_DBS, ERS_PUBLIC_DB, ERS_PRIVATE_DB
 
 class ERSReadOnly(object):
     """ ERS version with read-only methods.
-    
+
         :param fixed_peers: URL's of known peers
         :type fixed_peers: list
         :param local_only: whether or not the peer is local-only
@@ -58,19 +58,19 @@ class ERSReadOnly(object):
         '''
         Create an entity object, fill it will all the relevant documents
         '''
-        
+
         # Create the entity
         entity = Entity(entity_name)
-        
+
         # Add matching documents from the local store
         for source, db_name in self.store.db_names.iteritems():
             docs = self.store[db_name].docs_by_entity(entity_name)
             for doc in docs:
                 entity.add_document(doc, source)
-         
+
         # Get documents out of public/cache of connected peers
         # TODO parallelize
-        # TODO move to a separate call  
+        # TODO move to a separate call
     #    if not local:
     #        for peer in self.get_peers():
     #            url = peer['server_url']
@@ -90,12 +90,12 @@ class ERSReadOnly(object):
         #            self._timeout_count.pop(url, 0)
         #            for doc in remote_docs:
         #                entity.add_document(doc, 'remote')
-        
+
         return entity
 
     def search(self, prop, value=None):
         """ Search entities by property or property + value pair.
-        
+
             :param prop: property to search for
             :type prop: str.
             :param value: value to search for
@@ -138,13 +138,13 @@ class ERSReadOnly(object):
 
     def get_peers(self):
         """ Get the known peers.
-        
-            :rtype: array 
+
+            :rtype: array
         """
         if self._local_only:
             return []
 
-        result = [{'server_url': server_url} for server_url in self.fixed_peers] 
+        result = [{'server_url': server_url} for server_url in self.fixed_peers]
 
         state_doc = self.store[ERS_PUBLIC_DB]['_local/state']
         for peer in state_doc['peers']:
@@ -162,7 +162,7 @@ class ERSReadOnly(object):
 
 class ERS(ERSReadOnly):
     """ The read-write local class for an ERS peer.
-    
+
         :param fixed_peers: known peers
         :type fixed_peers: tuple
         :param local_only: if True ERS will not attempt to connect to remote peers
@@ -173,10 +173,10 @@ class ERS(ERSReadOnly):
 
     def reset(self):
         self.store.reset()
-    
+
     def delete_entity(self, entity_name):
         """ Delete an entity from the public and private stores.
-        
+
             :param entity: entity to delete
             :type entity: str.
             :param graph: graph to delete from
@@ -195,13 +195,13 @@ class ERS(ERSReadOnly):
         '''
         for scope in ['public', 'private']:
             document = entity.get_documents(scope)
-            
+
             # Skip the document if empty or not right scope
             if document == None:
                 continue
-            
+
             doc = document.to_json()
-            
+
             # Update the author, last modif date and other meta-data
             if '@owner' not in doc:
                 doc['@owner'] = self.host_urn
@@ -211,7 +211,7 @@ class ERS(ERSReadOnly):
                 self.store[ERS_PUBLIC_DB].save(doc)
             elif scope == 'private':
                 self.store[ERS_PRIVATE_DB].save(doc)
-                
+
     def cache_entity(self, entity):
         '''
         Place an entity in the cache. This mark the entity as being
@@ -223,14 +223,14 @@ class ERS(ERSReadOnly):
         # No point in caching it again
         if self.is_cached(entity.get_entity_name()):
             return
-        
+
         # Save all its current documents in the cache
         for document in entity.get_documents('remote'):
             self.store.cache.save_doc(document)
 
     def delete_from_cache(self, entity_name):
         """ Delete an entity from the cache.
-        
+
             :param entity_name: name of the entity to delete
             :type entity: str
             :returns: success status
@@ -240,9 +240,9 @@ class ERS(ERSReadOnly):
 
 class Document():
     '''
-    Example document representing partial data about 
+    Example document representing partial data about
     entity<http://www.w3.org/People/Berners-Lee/card#i>:
-    
+
     {
         "_id": "3d00b0cc1ea95dbaa806dbf5b96c4d5b",
         "_rev": "1-e004c4ac4b5f7923892ad417d364a85e",
@@ -259,16 +259,16 @@ class Document():
     '''
     def __init__(self, uri):
         self._doc = {'@id' : uri}
-    
+
     def add(self, predicate, value):
-        # Encode the value    
+        # Encode the value
         (v, t) = self._encode_value(value)
         if t != None:
             # Add the type to the context
             self._doc.setdefault('@context', {})
             self._doc['@context'][predicate] = {}
             self._doc['@context'][predicate]['@type'] = t
-            
+
         # Add the value to those associated to this property
         if predicate not in self._doc:
             self._doc[predicate] = v
@@ -277,7 +277,7 @@ class Document():
                 self._doc[predicate] = [self._doc[predicate]]
             # Append the value
             self._doc[predicate].append(v)
-    
+
     def delete(self, predicate, value=None):
         '''
         Remove a predicate and its associated values
@@ -285,19 +285,19 @@ class Document():
         # return if there is no matching predicate
         if predicate not in self._doc:
             return
-        
+
         # Delete all values
         if value == None:
             del self._doc[predicate]
             return
-        
+
         # Remove the specific value if found
         if isinstance(self._doc[predicate], list):
             self._doc[predicate].remove(value)
         else:
             if self._doc[predicate] == value:
                 del self._doc[predicate]
-                
+
         # If there is no more value associated remove the predicate
         if len(self._doc[predicate]) == 0:
             del self._doc[predicate]
@@ -305,40 +305,40 @@ class Document():
         # If there is only one value flatten the list
         if len(self._doc[predicate]) == 1:
             self._doc[predicate] = self._doc[predicate][0]
-        
+
     def to_json(self):
         return self._doc
-    
+
     def to_tuples(self):
         results = []
-        
+
         for key, values in self._doc.iteritems():
             # Don't return meta-elements
             if key[0] == '_' or key[0] == '@':
                 continue
-            
+
             # Get the type of that key if known
             t = None
             if '@context' in self._doc:
                 if key in self._doc['@context']:
                     t = self._doc['@context'][key]['@type']
-                    
+
             # Decode the values
             if isinstance(values, list):
                 for value in values:
                     results.append((key, self._decode_value(value, t)))
             else:
                 results.append((key, self._decode_value(values, t)))
-            
+
         return results
-    
+
     @staticmethod
     def from_json(doc_json):
         doc_id = doc_json['@id']
         document = Document(doc_id)
         document._doc = doc_json
         return document
-    
+
     def _encode_value(self, value):
         encoded_value = value
         encoded_type = None
@@ -352,7 +352,7 @@ class Document():
         if encoded_type == 'xsd:hexBinary':
             value = dbus.ByteArray(binascii.unhexlify(encoded_value))
         return value
-    
+
 class Entity():
     '''
     The Entity object is a wrapper around the different documents that all
@@ -361,8 +361,8 @@ class Entity():
     def __init__(self, entity_name):
         # Name of the entity
         self._entity_name = entity_name
-        
-        # List of documents, there can be one private, one public and several 
+
+        # List of documents, there can be one private, one public and several
         # coming from the cache or from other peers
         self._documents = {
             'public' : None,
@@ -370,21 +370,21 @@ class Entity():
             'remote' : [],
             'cache' : []
         }
-        
+
     def add(self, predicate, value, private=False):
         '''
         Add a property to the description of the entity
         '''
         # Set the scope to write in the right document
         scope = 'private' if private else 'public'
-        
+
         # If the document does not exist yet we need to create it
         if self._documents[scope] == None:
             self._documents[scope] = Document(self._entity_name)
-        
+
         # Add the statement
         self._documents[scope].add(predicate, value)
-                    
+
     def set(self, predicate, value, private=False):
         '''
         Set a predicate/value pair for the description of the entity.
@@ -392,7 +392,7 @@ class Entity():
         '''
         self.delete(predicate)
         self.add(predicate, value, private)
-        
+
     def delete(self, predicate, value=None):
         '''
         Delete a property from the description of the entity
@@ -401,7 +401,7 @@ class Entity():
         for scope in ['public', 'private']:
             if self._documents[scope] != None:
                 self._documents[scope].delete(predicate, value)
-                
+
     def to_tuples(self):
         '''
         Get the aggregated properties out of all the individual documents
@@ -419,36 +419,36 @@ class Entity():
             else:
                 for (p, o) in documents.to_tuples():
                     results.append((p, o, scope))
-                
-        
+
+
         return results
-    
+
     def add_document(self, doc_json, scope):
         '''
         Add a new document to the list of documents that compose this entity
         '''
         document = Document.from_json(doc_json)
-        
+
         if scope == 'public' or scope == 'private':
-            self._documents[scope] = document 
+            self._documents[scope] = document
         elif scope == 'cache':
             self._documents[scope].append(document)
         elif scope == 'remote':
             # TODO check that we don't append twice the same document
-            self._documents[scope].append(document) 
-            
+            self._documents[scope].append(document)
+
     def get_documents(self, scope):
         '''
         Return all the documents associated to this entity
         '''
         return self._documents[scope]
-    
+
     def get_entity_name(self):
         '''
         Get the name of the entity
         @return the name of that entity
         '''
         return self._entity_name
-    
+
 if __name__ == '__main__':
     print "To test this module use 'python ../../tests/test_ers.py'."

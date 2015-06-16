@@ -1,4 +1,4 @@
-""" 
+"""
 ers.store
 
 Routines for interaction with CouchDB.
@@ -70,11 +70,11 @@ class ERSDatabase(Database):
 
     def __init__(self, other):
         self.child_init = True
-        
+
         # user, password = auth
         # filters = client_opts.pop('filters', [])
         # FIXME filters.append(restkit.BasicAuth(user, password))
-        
+
     """docstring for ERSDatabase"""
     def docs_by_entity(self, entity_name):
         return self.view('index/by_entity',
@@ -107,13 +107,13 @@ class ERSDatabase(Database):
 
     def delete_entity(self, entity_name):
         """ Delete an entity <entity_name>
-        
+
             :param entity_name: name of the entity to delete
             :type entity: str
             :returns: success status
             :rtype: bool
         """
-        docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True} 
+        docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True}
                 for r in self.by_entity(entity_name)]
         return self.save_docs(docs)
 
@@ -125,25 +125,25 @@ class Store(object):
     def __init__(self, url=DEFAULT_STORE_ADMIN_URI, **client_opts):
         self.logger = logging.getLogger('ers-store')
         self._server = Server(url=url, **client_opts)
-        
+
         self.db_names = {'public': ERS_PUBLIC_DB,
                 'private': ERS_PRIVATE_DB,
                 'cache': ERS_CACHE_DB}
-        
-        # Add aggregate functions        
+
+        # Add aggregate functions
         # for method_name in ('docs_by_entity', 'by_property', 'by_property_value'):
         #    self.add_aggregate(method_name)
 
         # Check the status of the databases
         self._ers_dbs = {}
         self._repair()
-        
+
     def __getitem__(self, dbname):
         return self._ers_dbs[dbname]
-        # return ERSDatabase(self._db_uri(dbname), server=self) 
+        # return ERSDatabase(self._db_uri(dbname), server=self)
 
-    def __iter__(self): 
-        for dbname in self.all_dbs(): 
+    def __iter__(self):
+        for dbname in self.all_dbs():
             yield self._ers_dbs[dbname]
             # yield ERSDatabase(self._db_uri(dbname), server=self)
 
@@ -157,7 +157,7 @@ class Store(object):
         aggregate.__doc__ = """Calls method {}() of all databases in the store and returns an iterator over combined results""".format(method_name)
         aggregate.__name__ = method_name
         setattr(cls, method_name, aggregate)
- 
+
     def reset(self):
         for db_name in ALL_DBS:
             try:
@@ -165,34 +165,34 @@ class Store(object):
             except http.ResourceNotFound:
                 pass
         self._repair()
-            
+
     def by_property_value(self, property, value=None):
         results = []
         for db in self._ers_dbs.itervalues():
             for res in db.by_property_value(property, value):
                 results.append(res)
         return results
-       
-    def get_ers_db(self, dbname, **params): 
-        """ 
-        Try to return an ERSDatabase object for dbname. 
-        """ 
+
+    def get_ers_db(self, dbname, **params):
+        """
+        Try to return an ERSDatabase object for dbname.
+        """
         return self._ers_dbs[dbname]
 
     def info(self):
         return self._server.config()['couchdb']
-    
+
     def _repair(self):
         # Authenticate with the local store
         # user, password = auth
-        
+
         for dbname in ALL_DBS:
             # Recreate database if needed
             try:
                 db = self._server[dbname]
             except http.ResourceNotFound:
                 db = self._server.create(dbname)
-                
+
             # Create index design doc if needed
             if not '_design/index' in db:
                 db.save(index_doc())
@@ -201,7 +201,7 @@ class Store(object):
             if dbname == ERS_PUBLIC_DB:
                 if not '_local/state' in db:
                     db.save(state_doc())
-                
+
             # Save the ERSDatabase object
             self._ers_dbs[dbname] = ERSDatabase(db)
 
@@ -215,7 +215,7 @@ class ServiceStore(Store):
         # FIXME filters.append(restkit.BasicAuth(user, password))
         super(ServiceStore, self).__init__(url=url, **client_opts)
         self.replicator = self._server['_replicator']
-        
+
     def cache_contents(self):
         return list(self.cache.all_docs(startkey=u"_\ufff0",
                                         wrapper=lambda r: r['id']))
@@ -240,7 +240,7 @@ class ServiceStore(Store):
             print "Error while trying to update replicator docs: {}".format(e.errors)
 
 
-RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT)                                                        
+RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT)
 
 
 @timeout(REMOTE_SERVER_TIMEOUT)
