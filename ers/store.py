@@ -44,12 +44,12 @@ def index_doc():
                             for (property in doc) {
                                 if (property[0] != '_' && property[0] != '@') {
                                     var values = doc[property];
-                                    if (values instanceof Array) {
+                                    if (typeof(values) ==  'string') {
+                                        emit([property, doc[property]], entity);
+                                    } else {
                                         doc[property].forEach(
                                             function(value) {emit([property, value], entity);}
                                         )
-                                    } else {
-                                        emit([property, doc[property]], entity);
                                     }
                                 }
                             }
