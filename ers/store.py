@@ -119,9 +119,20 @@ class ERSDatabase(Database):
             :returns: success status
             :rtype: bool
         """
-        docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True}
-                for r in self.by_entity(entity_name)]
-        return self.save_docs(docs)
+        #docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True}
+        #        for r in self.by_entity(entity_name)]
+        #return self.save_docs(docs)
+        docs = self.docs_by_entity(entity_name).rows
+        result = True
+        for doc in docs:
+            try:
+                self.delete(doc)
+            except ResourceNotFound:
+                result = False
+                continue
+
+        return result
+
 
 
 class Store(object):

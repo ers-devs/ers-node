@@ -185,8 +185,8 @@ class ERS(ERSReadOnly):
             :rtype: bool.
         """
         status = True
-        status = status and self.store.public.delete_entity(entity_name)
-        status = status and self.store.private.delete_entity(entity_name)
+        status = status and self.store['ers-public'].delete_entity(entity_name)
+        status = status and self.store['ers-private'].delete_entity(entity_name)
         return status
 
     def persist_entity(self, entity):
@@ -294,17 +294,20 @@ class Document():
         # Remove the specific value if found
         if isinstance(self._doc[predicate], list):
             self._doc[predicate].remove(value)
+
+            #these checks should only be done on a list
+
+            # If there is no more value associated remove the predicate
+            if len(self._doc[predicate]) == 0:
+                del self._doc[predicate]
+
+            # If there is only one value flatten the list
+            if len(self._doc[predicate]) == 1:
+                self._doc[predicate] = self._doc[predicate][0]
+
         else:
             if self._doc[predicate] == value:
                 del self._doc[predicate]
-
-        # If there is no more value associated remove the predicate
-        if len(self._doc[predicate]) == 0:
-            del self._doc[predicate]
-
-        # If there is only one value flatten the list
-        if len(self._doc[predicate]) == 1:
-            self._doc[predicate] = self._doc[predicate][0]
 
     def to_json(self):
         return self._doc
