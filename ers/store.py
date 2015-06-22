@@ -119,14 +119,21 @@ class ERSDatabase(Database):
             :returns: success status
             :rtype: bool
         """
-        #docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True}
-        #        for r in self.by_entity(entity_name)]
+        # !! this method of deletion is necessary for correct cache replication behavior
+        # https://wiki.apache.org/couchdb/Replication
+        # """Note: When using filtered replication you should not use the DELETE method to remove documents,
+        #    but instead use PUT and add a _deleted:true field to the document, preserving the
+        #    fields required for the filter. Your Document Update Handler should make sure these fields
+        #    are always present. This will ensure that the filter will propagate deletions properly.
+        # """
+        docs = [{'_id': r['id'], '_rev': r['value']['rev'], "_deleted": True}
+                for r in self.by_entity(entity_name)]
         #return self.save_docs(docs)
-        docs = self.docs_by_entity(entity_name).rows
+        #docs = self.docs_by_entity(entity_name).rows
         result = True
         for doc in docs:
             try:
-                self.delete(doc)
+                self.save(doc)
             except ResourceNotFound:
                 result = False
                 continue
@@ -262,10 +269,10 @@ class ServiceStore(Store):
             print "Error while trying to update replicator docs: {}".format(e.errors)
 
 
-RemoteStore = partial(Store, databases=REMOTE_DBS, timeout=REMOTE_SERVER_TIMEOUT)
+RemoteStore = partial(Store)#, databases=REMOTE_DBS), timeout=REMOTE_SERVER_TIMEOUT)
 
 
-@timeout(REMOTE_SERVER_TIMEOUT)
+#@timeout(REMOTE_SERVER_TIMEOUT)
 def query_remote(uri, method_name, *args, **kwargs):
     remote_store = RemoteStore(uri)
     return list(getattr(remote_store, method_name)(*args, **kwargs))
