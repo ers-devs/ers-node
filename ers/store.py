@@ -221,10 +221,15 @@ class ServiceStore(Store):
         # FIXME filters.append(restkit.BasicAuth(user, password))
         super(ServiceStore, self).__init__(url=url, **client_opts)
         self.replicator = self._server['_replicator']
+        self.cache = self._server[ERS_CACHE_DB]
 
     def cache_contents(self):
-        return list(self.cache.all_docs(startkey=u"_\ufff0",
-                                        wrapper=lambda r: r['id']))
+        return list(self.cache.view('_all_docs', startkey=u"_\ufff0",
+                                        include_docs = True,
+                                        wrapper=lambda r: r['id']).rows)
+        # not sure whether this was the intended functionality
+        #return list(self.cache.all_docs(startkey=u"_\ufff0",
+        #                                wrapper=lambda r: r['id']))
 
     def replicator_docs(self):
         map_fun = '''function(r) {emit (r['id'], r['value']['rev'])}'''
