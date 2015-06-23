@@ -16,7 +16,7 @@ from timeout import TimeoutError
 
 import binascii
 import dbus
-from ers.store import OWN_DBS, ERS_PUBLIC_DB, ERS_PRIVATE_DB
+from ers.store import OWN_DBS, ERS_PUBLIC_DB, ERS_PRIVATE_DB, ERS_CACHE_DB
 
 class ERSReadOnly(object):
     """ ERS version with read-only methods.
@@ -72,7 +72,6 @@ class ERSReadOnly(object):
         # TODO parallelize
         # TODO move to a separate call
         if include_remote:
-            import pdb; pdb.set_trace()
             for peer in self.get_peers():
                 url = peer['server_url']
                 if self._is_failing(url):
@@ -159,7 +158,7 @@ class ERSReadOnly(object):
         Check if an entity exists in the cache
         FIXME Check if *all* the remote documents are in the cache store
         '''
-        return self.store.cache.entity_exist(entity_name)
+        return self.store[ERS_CACHE_DB].entity_exist(entity_name)
 
 class ERS(ERSReadOnly):
     """ The read-write local class for an ERS peer.
@@ -227,7 +226,7 @@ class ERS(ERSReadOnly):
 
         # Save all its current documents in the cache
         for document in entity.get_documents('remote'):
-            self.store.cache.save_doc(document)
+            self.store[ERS_CACHE_DB].save(document.to_json())
 
     def delete_from_cache(self, entity_name):
         """ Delete an entity from the cache.
@@ -237,7 +236,7 @@ class ERS(ERSReadOnly):
             :returns: success status
             :rtype: bool
         """
-        return self.store.cache.delete_entity(entity_name)
+        return self.store[ERS_CACHE_DB].delete_entity(entity_name)
 
 class Document():
     '''

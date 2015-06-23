@@ -28,7 +28,7 @@ from defaults import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPE_BRIDGE, ERS_PEER_TYPE
 from defaults import set_logging
 import gobject
 from zeroconf import ERSPeerInfo
-from store import ERS_PUBLIC_DB
+from store import ERS_PUBLIC_DB, ERS_CACHE_DB
 
 log = logging.getLogger('ers')
 
@@ -283,7 +283,7 @@ class ERSDaemon(object):
                     doc_id = 'ers-auto-cache-to-{0}:{1}'.format(peer.ip, peer.port)
                     docs[doc_id] = {
                         '_id': doc_id,
-                        'source': self._store.cache.dbname,
+                        'source': self._store[ERS_CACHE_DB].name,
                         'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
                         'continuous': True,
                         'doc_ids' : cache_contents
@@ -295,7 +295,7 @@ class ERSDaemon(object):
                     docs[doc_id] = {
                         '_id': doc_id,
                         'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
-                        'target': self._store.cache.dbname,
+                        'target': self._store.cache.name,
                         'continuous': True,
                         'doc_ids' : cache_contents
                     }
@@ -319,16 +319,16 @@ class ERSDaemon(object):
         cache_contents = self._store.cache_contents()
         if not cache_contents:
             return
-        for peer in self._peers.values():
+        for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
             for dbname in ('ers-public', 'ers-cache'):
                 source_db = r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
                 repl_doc = {
-                    'target': self._store.cache.dbname,
+                    'target': self._store[ERS_CACHE_DB].name,
                     'source': source_db,
                     'continuous': False,
                     'doc_ids' : cache_contents
                 }
-                self._store.replicator.save_doc(repl_doc)
+                self._store.replicator.save(repl_doc)
 
     def _check_already_running(self):
         log.debug("Check if already running")
