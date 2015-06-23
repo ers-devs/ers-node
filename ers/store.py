@@ -275,4 +275,11 @@ RemoteStore = partial(Store)#, databases=REMOTE_DBS), timeout=REMOTE_SERVER_TIME
 #@timeout(REMOTE_SERVER_TIMEOUT)
 def query_remote(uri, method_name, *args, **kwargs):
     remote_store = RemoteStore(uri)
-    return list(getattr(remote_store, method_name)(*args, **kwargs))
+    # TODO do we want to query both?
+    remote_public = remote_store[ERS_PUBLIC_DB]
+    remote_cache = remote_store[ERS_CACHE_DB]
+    public_docs = getattr(remote_public, method_name)(*args, **kwargs).rows
+    cache_docs  = getattr(remote_cache , method_name)(*args, **kwargs).rows
+    return public_docs + cache_docs
+
+

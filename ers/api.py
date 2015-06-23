@@ -54,7 +54,7 @@ class ERSReadOnly(object):
         """
         return randrange(self._timeout_count[url] + 1) != 0
 
-    def get(self, entity_name):
+    def get(self, entity_name, include_remote = True):
         '''
         Create an entity object, fill it will all the relevant documents
         '''
@@ -71,25 +71,26 @@ class ERSReadOnly(object):
         # Get documents out of public/cache of connected peers
         # TODO parallelize
         # TODO move to a separate call
-    #    if not local:
-    #        for peer in self.get_peers():
-    #            url = peer['server_url']
-    #            if self._is_failing(url):
-    #                continue
-    #
-        #        remote_docs = []
-        #        try:
-        #            remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
-        #        except TimeoutError:
-        #            self._timeout_count[url] += 1
-        #            sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
-        #                url, self._timeout_count[url]))
-        #        except Exception as e:
-        #            sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
-        #        else:
-        #            self._timeout_count.pop(url, 0)
-        #            for doc in remote_docs:
-        #                entity.add_document(doc, 'remote')
+        if include_remote:
+            import pdb; pdb.set_trace()
+            for peer in self.get_peers():
+                url = peer['server_url']
+                if self._is_failing(url):
+                    continue
+
+                remote_docs = []
+                try:
+                    remote_docs = store.query_remote(url, 'docs_by_entity', entity_name)
+                except TimeoutError:
+                    self._timeout_count[url] += 1
+                    sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                        url, self._timeout_count[url]))
+                except Exception as e:
+                    sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
+                else:
+                    self._timeout_count.pop(url, 0)
+                    for doc in remote_docs:
+                        entity.add_document(doc, 'remote')
 
         return entity
 
