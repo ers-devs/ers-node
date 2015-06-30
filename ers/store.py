@@ -252,8 +252,11 @@ class ServiceStore(Store):
         #                                wrapper=lambda r: r['id']))
 
     def replicator_docs(self):
-        map_fun = '''function(r) {emit (r['id'], r['value']['rev'])}'''
-        return self.replicator.query(map_fun, startkey=u"ers-auto-", endkey=u"ers-auto-\ufff0")
+        #map_fun = '''function(r) {emit (r['id'], r['value']['rev'])}'''
+
+        return map(lambda x: [x['id'], x['value']['rev']], self.replicator.view('_all_docs', startkey = 'ers-').rows)
+        #return self.replicator.view('_all_docs', startkey = 'ers-')
+        #return self.replicator.query(map_fun, startkey=u"ers-", endkey=u"ers-\ufff0")
 #        return self.replicator.all_docs(
 #                        startkey=u"ers-auto-",
 #                        endkey=u"ers-auto-\ufff0",

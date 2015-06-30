@@ -277,28 +277,28 @@ class ERSDaemon(object):
             # TODO
         else:
             cache_contents = self._store.cache_contents()
-            if cache_contents:
-                # Synchronise all the cached documents with the peers
-                for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                    doc_id = 'ers-auto-cache-to-{0}:{1}'.format(peer.ip, peer.port)
-                    docs[doc_id] = {
-                        '_id': doc_id,
-                        'source': self._store[ERS_CACHE_DB].name,
-                        'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
-                        'continuous': True,
-                        'doc_ids' : cache_contents
-                    }
+            #if cache_contents:
+            # Synchronise all the cached documents with the peers
+            for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+                doc_id = 'ers-get-from-cache-of-{0}:{1}'.format(peer.ip, peer.port)
+                docs[doc_id] = {
+                    '_id': doc_id,
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                    'target':self._store[ERS_CACHE_DB].name,
+                    'continuous': True,
+                    #'doc_ids' : cache_contents
+                }
 
-                # Get update from their public documents we have cached
-                for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                    doc_id = 'ers-auto-cache-to-{0}:{1}'.format(peer.ip, peer.port)
-                    docs[doc_id] = {
-                        '_id': doc_id,
-                        'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
-                        'target': self._store.cache.name,
-                        'continuous': True,
-                        'doc_ids' : cache_contents
-                    }
+            # Get update from their public documents we have cached
+            for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+                doc_id = 'ers-auto-get-from-public-of-{0}:{1}'.format(peer.ip, peer.port)
+                docs[doc_id] = {
+                    '_id': doc_id,
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
+                    'target': self._store.cache.name,
+                    'continuous': True,
+                    #'doc_ids' : cache_contents
+                }
 
 
         log.debug(docs)

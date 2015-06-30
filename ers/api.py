@@ -93,7 +93,7 @@ class ERSReadOnly(object):
 
         return entity
 
-    def search(self, prop, value=None):
+    def search(self, prop, value=None, include_remote = True):
         """ Search entities by property or property + value pair.
 
             :param prop: property to search for
@@ -106,23 +106,24 @@ class ERSReadOnly(object):
         result = set(self.store.by_property_value(prop, value))
 
         # Search peers
-        for peer in self.get_peers():
-            url = peer['server_url']
-            if self._is_failing(url):
-                continue
+        if include_remote:
+            for peer in self.get_peers():
+                url = peer['server_url']
+                if self._is_failing(url):
+                    continue
 
-            remote_result = []
-            try:
-                remote_result = store.query_remote(url, 'by_property_value', prop, value)
-            except TimeoutError:
-                self._timeout_count[url] += 1
-                sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
-                    url, self._timeout_count[url]))
-            except Exception as e:
-                sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
-            else:
-                self._timeout_count.pop(url, 0)
-                result.update(remote_result)
+                remote_result = []
+                try:
+                    remote_result = store.query_remote(url, 'by_property_value', prop, value)
+                except TimeoutError:
+                    self._timeout_count[url] += 1
+                    sys.stderr.write("Incremented timeout count for {0}: {1}\n".format(
+                        url, self._timeout_count[url]))
+                except Exception as e:
+                    sys.stderr.write("Warning: failed to query remote peer {0}. Error: {1}\n".format(peer, e))
+                else:
+                    self._timeout_count.pop(url, 0)
+                    result.update(remote_result)
 
         return list(result)
 
