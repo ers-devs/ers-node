@@ -24,6 +24,7 @@ DEFAULT_AUTH = ['admin', 'admin']
 ERS_PRIVATE_DB = 'ers-private'
 ERS_PUBLIC_DB = 'ers-public'
 ERS_CACHE_DB = 'ers-cache'
+ERS_STATE_DB = 'ers-state'
 ALL_DBS = [ERS_PRIVATE_DB, ERS_PUBLIC_DB, ERS_CACHE_DB]
 REMOTE_DBS = [ERS_PUBLIC_DB, ERS_CACHE_DB]
 OWN_DBS = [ERS_PRIVATE_DB, ERS_PUBLIC_DB]
@@ -152,7 +153,7 @@ class Store(object):
 
         self.db_names = {'public': ERS_PUBLIC_DB,
                 'private': ERS_PRIVATE_DB,
-                'cache': ERS_CACHE_DB}
+                'cache': ERS_CACHE_DB,}
 
         # Add aggregate functions
         # for method_name in ('docs_by_entity', 'by_property', 'by_property_value'):
@@ -209,6 +210,13 @@ class Store(object):
     def _repair(self):
         # Authenticate with the local store
         # user, password = auth
+        try:
+            state_db = self._server[ERS_STATE_DB]
+        except http.ResourceNotFound:
+            state_db = self._server.create(ERS_STATE_DB)
+        if not '_local/state' in state_db:
+            state_db.save(state_doc())
+        self._ers_dbs[ERS_STATE_DB] = ERSDatabase(state_db)
 
         for dbname in ALL_DBS:
             # Recreate database if needed
@@ -221,10 +229,10 @@ class Store(object):
             if not '_design/index' in db:
                 db.save(index_doc())
 
-            # Create state doc in the public database if needed
-            if dbname == ERS_PUBLIC_DB:
-                if not '_local/state' in db:
-                    db.save(state_doc())
+            ## Create state doc in the public database if needed
+            #if dbname == ERS_PUBLIC_DB:
+            #    if not '_local/state' in db:
+            #        db.save(state_doc())
 
             # Save the ERSDatabase object
             self._ers_dbs[dbname] = ERSDatabase(db)

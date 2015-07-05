@@ -29,7 +29,7 @@ from defaults import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPE_BRIDGE, ERS_PEER_TYPE
 from defaults import set_logging
 import gobject
 from zeroconf import ERSPeerInfo
-from store import ERS_PUBLIC_DB, ERS_CACHE_DB
+from store import ERS_PUBLIC_DB, ERS_CACHE_DB, ERS_STATE_DB
 
 log = logging.getLogger('ers')
 
@@ -241,7 +241,7 @@ class ERSDaemon(object):
 
     def _update_peers_in_couchdb(self):
         log.debug("Update peers in CouchDB")
-        state_doc = self._store[ERS_PUBLIC_DB]['_local/state']
+        state_doc = self._store[ERS_STATE_DB]['_local/state']
 
         # If there are bridges, do not record other peers in the state_doc.
         visible_peers = None
@@ -250,7 +250,7 @@ class ERSDaemon(object):
         else:
             visible_peers = self._peers[ERS_PEER_TYPE_CONTRIB]
         state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
-        self._store[ERS_PUBLIC_DB].save(state_doc)
+        self._store[ERS_STATE_DB].save(state_doc)
 
     def _update_replication_links(self):
         '''
