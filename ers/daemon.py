@@ -21,6 +21,7 @@ import sys
 import time
 import logging.handlers
 import zeroconf
+import uuid
 
 from store import ServiceStore
 from ConfigParser import SafeConfigParser
@@ -133,7 +134,11 @@ class ERSDaemon(object):
         self._init_db_connection()
 
         log.debug("Publish service on ZeroConf")
-        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname(), self.prefix, self.peer_type)
+        # if the hostname is the same as another node, avahi will not pick up the service
+        # so we must add some unique identifier
+        # uuid4 guarantees unique identifiers, but we cannot fit the whole 32 characters otherwise the name becomes too long
+        # thus, we only choose the first 20 and hope there will be no collisions
+        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname() + str(uuid.uuid4())[:20], self.prefix, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
         self._service.publish()
 
