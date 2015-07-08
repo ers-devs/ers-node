@@ -16,7 +16,7 @@ branches:
 before_install:
 
 install:
-    - sudo pip install -r requirements.txt --allow-all-external
+    - pip install -r requirements.txt --allow-all-external
 
 before_script:
     - sudo apt-get install couchdb
