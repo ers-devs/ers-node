@@ -216,6 +216,8 @@ class Store(object):
             state_db = self._server.create(ERS_STATE_DB)
         if not '_local/state' in state_db:
             state_db.save(state_doc())
+        if not '_design/index' in state_db:
+            state_db.save(index_doc())
         self._ers_dbs[ERS_STATE_DB] = ERSDatabase(state_db)
 
         for dbname in ALL_DBS:
