@@ -2,6 +2,7 @@ language: python
 
 services:
     - couchdb
+sudo: required
 
 python:
     - 2.7
