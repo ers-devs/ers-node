@@ -6,7 +6,7 @@ is supported.
 """
 from defaults import ERS_DEFAULT_PEER_TYPE, ERS_AVAHI_SERVICE_TYPE,\
     ERS_DEFAULT_PREFIX
-    
+
 __author__ = 'Cristian Dinu <goc9000@gmail.com>'
 
 import re
@@ -150,10 +150,10 @@ class ServiceMonitor(object):
 
         browser.connect_to_signal("ItemNew", self._on_item_new)
         browser.connect_to_signal("ItemRemove", self._on_item_remove)
-        
-                
+
+
         self._inited = True
-        
+
     def _on_item_new(self, interface, protocol, name, service_type, domain, flags):
         if (flags & avahi.LOOKUP_RESULT_LOCAL) and not self.see_self:
             return
@@ -228,7 +228,7 @@ class ServicePeer(object):
                                                            self.ip, self.port)
 
 class ERSPeerInfo(ServicePeer):
-    """ 
+    """
         This class contains information on an ERS peer.
     """
     def __init__(self, service_name, host, ip, port, prefix=ERS_DEFAULT_PREFIX, peer_type=ERS_DEFAULT_PEER_TYPE):
@@ -241,7 +241,7 @@ class ERSPeerInfo(ServicePeer):
 
     def to_json(self):
         """ Returns the ERS peer information from this instance in JSON format.
-        
+
             :rtype: dict.
         """
         return {
@@ -255,9 +255,9 @@ class ERSPeerInfo(ServicePeer):
 
     @staticmethod
     def from_service_peer(svc_peer):
-        """ 
+        """
             Get an ERSPeerInfo instance from a given service peer.
-        
+
             :param svc_peer: a service peer
             :type svc_peer: ServicePeer instance
             :rtype: ERSPeerInfo instance

@@ -20,8 +20,8 @@ import socket
 import sys
 import time
 import logging.handlers
-import restkit
 import zeroconf
+import uuid
 
 from store import ServiceStore
 from ConfigParser import SafeConfigParser
@@ -29,6 +29,7 @@ from defaults import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPE_BRIDGE, ERS_PEER_TYPE
 from defaults import set_logging
 import gobject
 from zeroconf import ERSPeerInfo
+from store import ERS_PUBLIC_DB, ERS_CACHE_DB, ERS_STATE_DB
 
 log = logging.getLogger('ers')
 
@@ -43,9 +44,9 @@ class Configuration(object):
 
         # Get the logger
         #self._config.get('log','level')
-        
+
         self._setup_logging()
-        
+
     def _setup_logging(self):
         """
         Configure a logger for the ERS daemon
@@ -63,21 +64,21 @@ class Configuration(object):
             handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
 
         set_logging(self._config.get('log','level'), handler=handler)
-        
+
     def logger(self):
         """
         Return the logger
         """
         return self._logger
-    
+
     def tries(self):
         tries =  int(self._config.get('couchdb','tries'))
         return max(tries, 1)
-    
+
     def pidfile(self):
         pidfile = self._config.get('node','pid_file')
         return pidfile if pidfile is not None and pidfile.lower() != 'none' else None
-    
+
     def prefix(self):
         return self._config.get('couchdb','prefix')
 
@@ -86,11 +87,11 @@ class Configuration(object):
 
     def node_type(self):
         return self._config.get('node','type')
-    
+
 class ERSDaemon(object):
-    """ 
+    """
         The daemon class for the ERS daemon.
-    
+
         :param config: configuration object
         :type config: Configuration
     """
@@ -123,14 +124,21 @@ class ERSDaemon(object):
         self.tries = config.tries()
 
     def start(self):
-        """ 
+        """
         Starting up an ERS daemon.
         """
         log.info("Starting ERS daemon")
         self._check_already_running()
+
+        log.debug("Initialise CouchDB")
         self._init_db_connection()
 
-        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname(), self.prefix, self.peer_type)
+        log.debug("Publish service on ZeroConf")
+        # if the hostname is the same as another node, avahi will not pick up the service
+        # so we must add some unique identifier
+        # uuid4 guarantees unique identifiers, but we cannot fit the whole 32 characters otherwise the name becomes too long
+        # thus, we only choose the first 20 and hope there will be no collisions
+        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname() + str(uuid.uuid4())[:20], self.prefix, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
         self._service.publish()
 
@@ -145,14 +153,15 @@ class ERSDaemon(object):
         atexit.register(self.stop)
 
         log.info("ERS daemon started")
-        
+
     def _init_db_connection(self):
+        log.debug("Initialise databases")
         for i in range(self.tries):  # @UnusedVariable
             try:
                 self._store = ServiceStore()
                 return
-            except restkit.RequestError:
-                time.sleep(1)
+            #except restkit.RequestError:
+            #    time.sleep(1)
             except Exception as e:
                 raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
         raise RuntimeError("Error connecting to CouchDB. Please make sure CouchDB is running.")
@@ -170,7 +179,7 @@ class ERSDaemon(object):
                 pass
 
     def stop(self):
-        """ 
+        """
         Stopping an ERS daemon.
         """
         if not self._active:
@@ -226,34 +235,35 @@ class ERSDaemon(object):
         log.debug("Peer left: " + str(ex_peer))
 
         del self._peers[peer_info.peer_type][peer.service_name]
-        
+
         self._update_peers_in_couchdb()
         self._update_replication_links()
 
     def _update_peers_in_couchdb(self):
-        state_doc = self._store.public.open_doc('_local/state')
+        log.debug("Update peers in CouchDB")
+        state_doc = self._store[ERS_STATE_DB]['_local/state']
 
         # If there are bridges, do not record other peers in the state_doc.
         visible_peers = None
         if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
-            visible_peers = self._peers[ERS_PEER_TYPE_BRIDGE] 
+            visible_peers = self._peers[ERS_PEER_TYPE_BRIDGE]
         else:
             visible_peers = self._peers[ERS_PEER_TYPE_CONTRIB]
         state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
-        self._store.public.save_doc(state_doc)
+        self._store[ERS_STATE_DB].save(state_doc)
 
     def _update_replication_links(self):
         '''
         Update the links to replicate documents with other contributors and bridges
         '''
         log.debug("Update replication documents")
-        
+
         # Clear all the previous replicator documents
         self._clear_replication_documents()
-        
+
         # List of replication rules
         docs = {}
-        
+
         # If there is at least one bridge in the neighbourhood focus on it
         # otherwise establish rules with all the contributors
         if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
@@ -267,40 +277,40 @@ class ERSDaemon(object):
                     'continuous': True
                     # TODO add the option to not do it too often
                 }
-                
+
             # Synchronise local cache and bridge cache
             # TODO
         else:
             cache_contents = self._store.cache_contents()
-            if cache_contents:
-                # Synchronise all the cached documents with the peers
-                for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                    doc_id = 'ers-auto-cache-to-{0}:{1}'.format(peer.ip, peer.port)
-                    docs[doc_id] = {
-                        '_id': doc_id,
-                        'source': self._store.cache.dbname,
-                        'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
-                        'continuous': True,
-                        'doc_ids' : cache_contents
-                    }
-                    
-                # Get update from their public documents we have cached
-                for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                    doc_id = 'ers-auto-cache-to-{0}:{1}'.format(peer.ip, peer.port)
-                    docs[doc_id] = {
-                        '_id': doc_id,
-                        'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
-                        'target': self._store.cache.dbname,
-                        'continuous': True,
-                        'doc_ids' : cache_contents
-                    }
-            
-            
+            #if cache_contents:
+            # Synchronise all the cached documents with the peers
+            for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+                doc_id = 'ers-get-from-cache-of-{0}:{1}'.format(peer.ip, peer.port)
+                docs[doc_id] = {
+                    '_id': doc_id,
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                    'target':self._store[ERS_CACHE_DB].name,
+                    'continuous': True,
+                    #'doc_ids' : cache_contents
+                }
+
+            # Get update from their public documents we have cached
+            for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+                doc_id = 'ers-auto-get-from-public-of-{0}:{1}'.format(peer.ip, peer.port)
+                docs[doc_id] = {
+                    '_id': doc_id,
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
+                    'target': self._store.cache.name,
+                    'continuous': True,
+                    #'doc_ids' : cache_contents
+                }
+
+
         log.debug(docs)
-        
+
         # If this node is a bridge configured to push data to an aggregator
         # add one more rule to do that
-        
+
         # Apply sync rules
         self._set_replication_documents(docs)
 
@@ -309,30 +319,31 @@ class ERSDaemon(object):
 
     def _set_replication_documents(self, documents):
         self._store.update_replicator_docs(documents)
-        
+
     def _update_cache(self):
         cache_contents = self._store.cache_contents()
         if not cache_contents:
             return
-        for peer in self._peers.values():
+        for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
             for dbname in ('ers-public', 'ers-cache'):
                 source_db = r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
                 repl_doc = {
-                    'target': self._store.cache.dbname,
+                    'target': self._store[ERS_CACHE_DB].name,
                     'source': source_db,
                     'continuous': False,
-                    'doc_ids' : cache_contents                
+                    'doc_ids' : cache_contents
                 }
-                self._store.replicator.save_doc(repl_doc)
+                self._store.replicator.save(repl_doc)
 
     def _check_already_running(self):
+        log.debug("Check if already running")
         if self.pidfile is not None and os.path.exists(self.pidfile):
             raise RuntimeError("The ERS daemon seems to be already running. If this is not the case, " +
                                "delete " + self.pidfile + " and try again.")
 
 
 def run():
-    """ 
+    """
     Parse the given arguments for setting up the daemon and run it.
     """
     # Parse the command line
@@ -342,7 +353,7 @@ def run():
 
     # Create the configuration object
     config = Configuration(args.config)
-    
+
     daemon = None
     failed = False
     mainloop = None
@@ -365,7 +376,7 @@ def run():
         # Start the main loop
         mainloop = gobject.MainLoop()
         mainloop.run()
-        
+
     except (KeyboardInterrupt, SystemExit):
         if mainloop is not None:
             mainloop.quit()
@@ -381,4 +392,4 @@ def run():
 
 if __name__ == '__main__':
     run()
-    
+
