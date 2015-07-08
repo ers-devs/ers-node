@@ -16,7 +16,7 @@ from timeout import TimeoutError
 
 import binascii
 import dbus
-from ers.store import OWN_DBS, ERS_PUBLIC_DB, ERS_PRIVATE_DB, ERS_CACHE_DB
+from ers.store import OWN_DBS, ERS_PUBLIC_DB, ERS_PRIVATE_DB, ERS_CACHE_DB, ERS_STATE_DB
 
 class ERSReadOnly(object):
     """ ERS version with read-only methods.
@@ -147,7 +147,7 @@ class ERSReadOnly(object):
 
         result = [{'server_url': server_url} for server_url in self.fixed_peers]
 
-        state_doc = self.store[ERS_PUBLIC_DB]['_local/state']
+        state_doc = self.store[ERS_STATE_DB]['_local/state']
         for peer in state_doc['peers']:
             result.append({
                 'server_url': r'http://' + peer['ip'] + ':' + str(peer['port']) + '/',
