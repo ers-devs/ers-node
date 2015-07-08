@@ -20,6 +20,6 @@ install:
 
 before_script:
     - curl -X PUT http://127.0.0.1:5984/_config/admins/admin -d '"admin"'
-    - apt-get install python-dbus
+    - sudo apt-get install python-dbus
 
 script: python unit_tests.py
