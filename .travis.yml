@@ -22,4 +22,4 @@ before_script:
     - curl -X PUT http://127.0.0.1:5984/_config/admins/admin -d '"admin"'
     - apt-get install python-dbus
 
-script: python tests/test_ers.py
+#script: python tests/test_ers.py
