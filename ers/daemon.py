@@ -269,14 +269,24 @@ class ERSDaemon(object):
         if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
             # Publish all the public documents to the cache of the bridges
             for peer in self._peers[ERS_PEER_TYPE_BRIDGE].values():
-                doc_id = 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
+                #doc_id = 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
+                #docs[doc_id] = {
+                #    '_id': doc_id,
+                #    'source': 'ers-public',
+                #    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                #    'continuous': True
+                #    # TODO add the option to not do it too often
+                #}
+                # ALSO cache
+                doc_id = 'ers-pull-from-bridge-{0}:{1}'.format(peer.ip, peer.port)
                 docs[doc_id] = {
                     '_id': doc_id,
-                    'source': 'ers-public',
-                    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                    'target':self._store[ERS_CACHE_DB].name,
                     'continuous': True
                     # TODO add the option to not do it too often
                 }
+
 
             # Synchronise local cache and bridge cache
             # TODO
@@ -300,7 +310,7 @@ class ERSDaemon(object):
                 docs[doc_id] = {
                     '_id': doc_id,
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
-                    'target': self._store.cache.name,
+                    'target': self._store[ERS_CACHE_DB].name,
                     'continuous': True,
                     #'doc_ids' : cache_contents
                 }
@@ -365,6 +375,7 @@ def run():
             mainloop.quit()
         signal.signal(signal.SIGQUIT, sig_handler)
         signal.signal(signal.SIGTERM, sig_handler)
+        signal.signal(signal.SIGUSR1, daemon._update_replication_links)
 
         # Initialise the web interface handler
         #application = web.Application([

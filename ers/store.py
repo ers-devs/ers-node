@@ -281,7 +281,7 @@ class ServiceStore(Store):
         try:
             self.replicator.update(repl_docs.values())
         except TypeError as e:
-            print "Error while trying to update replicator docs: {}".format(e.errors)
+            print "Error while trying to update replicator docs: {}".format(str(e))
 
 
 RemoteStore = partial(Store)#, databases=REMOTE_DBS), timeout=REMOTE_SERVER_TIMEOUT)

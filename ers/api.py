@@ -5,6 +5,8 @@ Provides class ERS implementing API to Entity Registry System.
 
 """
 import sys
+import os
+import signal
 
 from hashlib import md5
 from socket import gethostname
@@ -175,6 +177,23 @@ class ERS(ERSReadOnly):
     def reset(self):
         self.store.reset()
 
+    def trigger_replication_update(self):
+        pidfile_path = '/vagrant/ers_daemon.pid'
+        if os.path.isfile(pidfile_path):
+            f = open(pidfile_path)
+            lines = f.readlines()
+            pid = lines[0].split()[0]
+            pid = int(pid)
+            f.close()
+        else:
+            pid = 0
+            print "Could not find daemon process running!"
+            return pid
+
+        #signal replication
+        os.kill(pid, signal.SIGUSR1)
+        return 1
+
     def delete_entity(self, entity_name):
         """ Delete an entity from the public and private stores.
 
@@ -228,6 +247,8 @@ class ERS(ERSReadOnly):
         # Save all its current documents in the cache
         for document in entity.get_documents('remote'):
             self.store[ERS_CACHE_DB].save(document.to_json())
+
+        self.trigger_replication_update()
 
     def delete_from_cache(self, entity_name):
         """ Delete an entity from the cache.
