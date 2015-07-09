@@ -40,7 +40,6 @@ def start_daemon():
 @app.route('/StopDaemon/<pid>')
 def stop_daemon(pid):
     # linux, mac
-    import pdb; pdb.set_trace()
     os.kill(int(pid), signal.SIGTERM)
     try:
         killedpid, stat = os.waitpid(pid, os.WNOHANG)

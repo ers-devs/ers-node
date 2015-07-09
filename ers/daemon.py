@@ -269,16 +269,16 @@ class ERSDaemon(object):
         if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
             # Publish all the public documents to the cache of the bridges
             for peer in self._peers[ERS_PEER_TYPE_BRIDGE].values():
-                #doc_id = 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
-                #docs[doc_id] = {
-                #    '_id': doc_id,
-                #    'source': 'ers-public',
-                #    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
-                #    'continuous': True
-                #    # TODO add the option to not do it too often
-                #}
+                doc_id = 'ers-{2}-auto-local-to-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
+                docs[doc_id] = {
+                    '_id': doc_id,
+                    'source': 'ers-public',
+                    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                    'continuous': True
+                    # TODO add the option to not do it too often
+                }
                 # ALSO cache
-                doc_id = 'ers-pull-from-bridge-{0}:{1}'.format(peer.ip, peer.port)
+                doc_id = 'ers-{2}-pull-from-bridge-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
                 docs[doc_id] = {
                     '_id': doc_id,
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
@@ -295,7 +295,7 @@ class ERSDaemon(object):
             #if cache_contents:
             # Synchronise all the cached documents with the peers
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                doc_id = 'ers-get-from-cache-of-{0}:{1}'.format(peer.ip, peer.port)
+                doc_id = 'ers-{2}-get-from-cache-of-{0}:{1}'.format(peer.ip, peer.port,socket.gethostname())
                 docs[doc_id] = {
                     '_id': doc_id,
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
@@ -306,7 +306,7 @@ class ERSDaemon(object):
 
             # Get update from their public documents we have cached
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                doc_id = 'ers-auto-get-from-public-of-{0}:{1}'.format(peer.ip, peer.port)
+                doc_id = 'ers-{2}-auto-get-from-public-of-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
                 docs[doc_id] = {
                     '_id': doc_id,
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),

@@ -94,7 +94,7 @@ class ReplicationTestCase(unittest.TestCase):
         # they should be replicated to the bridge's cache, and then to the caches of the nodes
         # we want to see how many are in node2's cache from those sent to node1 and vice-versa
 
-        total_time = 20
+        total_time = 30
         while time.time() - req_start < total_time:
             print '-------------------------------------------'
             url = node2_url + '/ShowDoc/ers-public/' + document_id_node2 + '/rdf:comment'
@@ -120,7 +120,7 @@ class ReplicationTestCase(unittest.TestCase):
             print "node 2 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
             print '-------------------------------------------'
             print "\n"
-            time.sleep(0.5)
+            time.sleep(1)
 
 
         #stop everything
