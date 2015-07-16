@@ -150,7 +150,7 @@ class ERSDaemon(object):
         self._init_pidfile()
         self._active = True
 
-        atexit.register(self.stop)
+        #atexit.register(self.stop)
 
         log.info("ERS daemon started")
 
@@ -270,13 +270,13 @@ class ERSDaemon(object):
             # Publish all the public documents to the cache of the bridges
             for peer in self._peers[ERS_PEER_TYPE_BRIDGE].values():
                 doc_id = 'ers-{2}-auto-local-to-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
-                docs[doc_id] = {
-                    '_id': doc_id,
-                    'source': 'ers-public',
-                    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
-                    'continuous': True
-                    # TODO add the option to not do it too often
-                }
+                #docs[doc_id] = {
+                #    '_id': doc_id,
+                #    'source': 'ers-public',
+                #    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                #    'continuous': True
+                #    # TODO add the option to not do it too often
+                #}
                 # ALSO cache
                 doc_id = 'ers-{2}-pull-from-bridge-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
                 docs[doc_id] = {
@@ -373,10 +373,11 @@ def run():
 
         def sig_handler(sig, frame):
             mainloop.quit()
+        def usr_sig_handler(sig, frame):
+            daemon.update_replication_links()
         signal.signal(signal.SIGQUIT, sig_handler)
         signal.signal(signal.SIGTERM, sig_handler)
-        signal.signal(signal.SIGUSR1, daemon._update_replication_links)
-
+        signal.signal(signal.SIGUSR2, usr_sig_handler)
         # Initialise the web interface handler
         #application = web.Application([
         #    (r"/api/(.*)", WebAPIHandler),

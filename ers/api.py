@@ -178,7 +178,7 @@ class ERS(ERSReadOnly):
         self.store.reset()
 
     def trigger_replication_update(self):
-        pidfile_path = '/vagrant/ers_daemon.pid'
+        pidfile_path = '/home/vagrant/ers_daemon.pid'
         if os.path.isfile(pidfile_path):
             f = open(pidfile_path)
             lines = f.readlines()
@@ -231,6 +231,7 @@ class ERS(ERSReadOnly):
                 self.store[ERS_PUBLIC_DB].save(doc)
             elif scope == 'private':
                 self.store[ERS_PRIVATE_DB].save(doc)
+            #self.trigger_replication_update()
 
     def cache_entity(self, entity):
         '''
@@ -248,7 +249,7 @@ class ERS(ERSReadOnly):
         for document in entity.get_documents('remote'):
             self.store[ERS_CACHE_DB].save(document.to_json())
 
-        self.trigger_replication_update()
+        #self.trigger_replication_update()
 
     def delete_from_cache(self, entity_name):
         """ Delete an entity from the cache.

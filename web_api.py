@@ -67,6 +67,11 @@ def get_entity(entity):
     created_entity = interface.ers.get(entity, include_remote = True)
     return 'got %s !\n' % entity
 
+@app.route('/Delete/<entity_name>')
+def delete_entity(entity_name):
+    status = interface.ers.delete_entity(entity_name)
+    return 'operation status : ' + str(status)
+
 @app.route('/BatchAddStatement/<entity>/', methods = ['POST'])
 def batch_add_statement(entity):
     request_data = json.loads(request.data)
@@ -78,6 +83,8 @@ def batch_add_statement(entity):
         pred = predicates[i]
         val = values[i]
         add_statement(entity, pred, val)
+        import time
+        time.sleep(0.3)
     return 'batch added'
 
 @app.route('/AddStatement/<entity>/<predicate>/<value>')
@@ -120,7 +127,11 @@ def show_cache(db_name):
 def show_doc(db_name, doc_id, property_id):
     try:
         entries = interface.ers.store[db_name][doc_id][property_id]
-        return str(len(entries))
+        if type(entries) is list:
+            return str(len(entries))
+        else:
+            #only have 1 element
+            return '1'
     except:
         return '0'
 
@@ -169,4 +180,5 @@ def search(prop, val):
 
 if __name__ == '__main__':
     app.debug = True
+
     app.run(host='0.0.0.0', threaded=True)

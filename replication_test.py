@@ -30,21 +30,25 @@ class ReplicationTestCase(unittest.TestCase):
         self.assertEqual(resp3.status_code, 200)
         d3_pid = resp3.content
         print "bridge daemon started with pid " + d3_pid
+        time.sleep(2)
 
         resp1 = requests.get(node1_url + '/StartDaemon')
         self.assertEqual(resp1.status_code, 200)
         d1_pid = resp1.content
         print "daemon started with pid " + d1_pid
+        time.sleep(2)
 
         resp2 = requests.get(node2_url + '/StartDaemon')
         self.assertEqual(resp2.status_code, 200)
         d2_pid = resp2.content
         print "daemon started with pid " + d2_pid
 
+        time.sleep(2)
         #clean_db
         resp1 = requests.get(node1_url + '/ResetDb')
         resp1 = requests.get(node2_url + '/ResetDb')
         resp1 = requests.get(bridge_url+ '/ResetDb')
+        time.sleep(2)
 
         bridge_entity = "urn:ers:bridge_entity"
 
@@ -94,7 +98,7 @@ class ReplicationTestCase(unittest.TestCase):
         # they should be replicated to the bridge's cache, and then to the caches of the nodes
         # we want to see how many are in node2's cache from those sent to node1 and vice-versa
 
-        total_time = 30
+        total_time = 50
         while time.time() - req_start < total_time:
             print '-------------------------------------------'
             url = node2_url + '/ShowDoc/ers-public/' + document_id_node2 + '/rdf:comment'
@@ -149,9 +153,14 @@ class ReplicationTestCase(unittest.TestCase):
         self.assertEqual(resp2.status_code, 200)
         self.assertTrue(resp2.content.startswith('ERS web interface running'))
 
+        #wait for the connection to be setup
+        time.sleep(2)
+
         #clean_db
         resp1 = requests.get(node1_url + '/ResetDb')
         resp1 = requests.get(node2_url + '/ResetDb')
+        #wait for resetting to finish
+        time.sleep(2)
 
         #add statements
         resp1 = requests.get(node1_url + '/AddStatement/' + test_entity + '/rdf:type/foaf:LocalAgent')
@@ -170,7 +179,7 @@ class ReplicationTestCase(unittest.TestCase):
 
         both_working = 10
         node2_alone = 25
-        total_time = 30
+        total_time = 70
 
         executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
         pred =[]
@@ -246,6 +255,23 @@ class ReplicationTestCase(unittest.TestCase):
             if nr_values == replication_statements + 1:
                 print "Done"
                 break
+
+        resp = requests.get(node2_url + '/Delete/' + test_entity)
+        deletion_start = time.time()
+
+        while time.time() - deletion_start < 10:
+            url = node2_url + '/ShowDoc/ers-public/' + document_id + '/rdf:type'
+            resp = requests.get(url)
+            nr_values = int( resp.content)
+            print "node 2 public after {} nr_values:{} ".format(time.time() - req_start, nr_values)
+
+            url = node1_url + '/ShowDoc/ers-cache/' + document_id + '/rdf:type'
+            resp = requests.get(url)
+            nr_values = int( resp.content)
+            print "node 1 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
+            time.sleep(0.5)
+
+
 
         resp = requests.get(node1_url + '/StopDaemon/' + d1_pid)
         resp = requests.get(node2_url + '/StopDaemon/' + d2_pid)
