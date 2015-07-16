@@ -32,6 +32,7 @@ from zeroconf import ERSPeerInfo
 from store import ERS_PUBLIC_DB, ERS_CACHE_DB, ERS_STATE_DB
 
 log = logging.getLogger('ers')
+FLASK_PORT = 5678
 
 class Configuration(object):
     """
@@ -150,7 +151,7 @@ class ERSDaemon(object):
         self._init_pidfile()
         self._active = True
 
-        #atexit.register(self.stop)
+        atexit.register(self.stop)
 
         log.info("ERS daemon started")
 
@@ -160,10 +161,9 @@ class ERSDaemon(object):
             try:
                 self._store = ServiceStore()
                 return
-            #except restkit.RequestError:
-            #    time.sleep(1)
             except Exception as e:
-                raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
+                #raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
+                log.info("Error connecting to Couchdb on try {0} with exception {1}".format(str(i), str(e)))
         raise RuntimeError("Error connecting to CouchDB. Please make sure CouchDB is running.")
 
     def _init_pidfile(self):
@@ -242,15 +242,21 @@ class ERSDaemon(object):
     def _update_peers_in_couchdb(self):
         log.debug("Update peers in CouchDB")
         state_doc = self._store[ERS_STATE_DB]['_local/state']
+        ok = False
+        while ok == False:
+            # If there are bridges, do not record other peers in the state_doc.
+            visible_peers = None
+            if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
+                visible_peers = self._peers[ERS_PEER_TYPE_BRIDGE]
+            else:
+                visible_peers = self._peers[ERS_PEER_TYPE_CONTRIB]
+            state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
+            try:
+                self._store[ERS_STATE_DB].save(state_doc)
+                ok = True
+            except Exception as e:
+                pass
 
-        # If there are bridges, do not record other peers in the state_doc.
-        visible_peers = None
-        if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
-            visible_peers = self._peers[ERS_PEER_TYPE_BRIDGE]
-        else:
-            visible_peers = self._peers[ERS_PEER_TYPE_CONTRIB]
-        state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
-        self._store[ERS_STATE_DB].save(state_doc)
 
     def _update_replication_links(self):
         '''
@@ -283,7 +289,8 @@ class ERSDaemon(object):
                     '_id': doc_id,
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
                     'target':self._store[ERS_CACHE_DB].name,
-                    'continuous': True
+                    'continuous': True,
+                    'doc_ids': cache_contents,
                     # TODO add the option to not do it too often
                 }
 
@@ -303,6 +310,10 @@ class ERSDaemon(object):
                     'continuous': True,
                     #'doc_ids' : cache_contents
                 }
+                if self.peer_type == ERS_PEER_TYPE_CONTRIB:
+                    docs[doc_id]['doc_ids'] = cache_contents
+                #if i am a regular peer, only sync cached documents.
+                #as a bridge, we pull evertyhing
 
             # Get update from their public documents we have cached
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
@@ -314,6 +325,8 @@ class ERSDaemon(object):
                     'continuous': True,
                     #'doc_ids' : cache_contents
                 }
+                if self.peer_type == ERS_PEER_TYPE_CONTRIB:
+                    docs[doc_id]['doc_ids'] = cache_contents
 
 
         log.debug(docs)
@@ -351,6 +364,31 @@ class ERSDaemon(object):
             raise RuntimeError("The ERS daemon seems to be already running. If this is not the case, " +
                                "delete " + self.pidfile + " and try again.")
 
+daemon = None
+
+from flask import Flask, request
+app = Flask(__name__)
+
+@app.route('/ReplicationLinksUpdate')
+def update_replication_links_api():
+    global daemon
+    daemon._update_replication_links()
+    return 'Replication links updated'
+
+
+def shutdown_server():
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Not running with the Werkzeug Server')
+    func()
+
+@app.route('/Stop')
+def stop_server():
+    shutdown_server()
+    return 'Server shutting down'
+
+def run_flask():
+    app.run(port=FLASK_PORT, threaded = True)
 
 def run():
     """
@@ -364,7 +402,7 @@ def run():
     # Create the configuration object
     config = Configuration(args.config)
 
-    daemon = None
+    global daemon
     failed = False
     mainloop = None
     try:
@@ -386,18 +424,30 @@ def run():
         #application.listen(8888, address="127.0.0.1")
 
         # Start the main loop
+        import threading
+        thread = threading.Thread(target = run_flask)
+        thread.start()
         mainloop = gobject.MainLoop()
+        gobject.threads_init()
+
         mainloop.run()
 
     except (KeyboardInterrupt, SystemExit):
         if mainloop is not None:
             mainloop.quit()
+        import requests
+        requests.get('http://localhost:'+str(FLASK_PORT)+'/Stop')
     except RuntimeError as e:
         log.critical(str(e))
         failed = True
 
     if daemon is not None:
         daemon.stop()
+        #maybe daemon has been stopped some other way ?
+        try:
+            requests.get('http://localhost:'+str(FLASK_PORT)+'/Stop')
+        except Exception as e:
+            pass
 
     sys.exit(os.EX_SOFTWARE if failed else os.EX_OK)
 

@@ -30,27 +30,25 @@ class ReplicationTestCase(unittest.TestCase):
         self.assertEqual(resp3.status_code, 200)
         d3_pid = resp3.content
         print "bridge daemon started with pid " + d3_pid
-        time.sleep(2)
 
         resp1 = requests.get(node1_url + '/StartDaemon')
         self.assertEqual(resp1.status_code, 200)
         d1_pid = resp1.content
         print "daemon started with pid " + d1_pid
-        time.sleep(2)
 
         resp2 = requests.get(node2_url + '/StartDaemon')
         self.assertEqual(resp2.status_code, 200)
         d2_pid = resp2.content
         print "daemon started with pid " + d2_pid
+        #import pdb; pdb.set_trace()
 
-        time.sleep(2)
         #clean_db
         resp1 = requests.get(node1_url + '/ResetDb')
         resp1 = requests.get(node2_url + '/ResetDb')
         resp1 = requests.get(bridge_url+ '/ResetDb')
-        time.sleep(2)
 
         bridge_entity = "urn:ers:bridge_entity"
+        #import pdb; pdb.set_trace()
 
         #add statements
         resp1 = requests.get(node1_url + '/AddStatement/' + bridge_entity+ '/rdf:comment/random:node1')
@@ -81,6 +79,7 @@ class ReplicationTestCase(unittest.TestCase):
             pred_node2.append('rdf:comment')
             val_node2.append('replication:node2_' + str(i))
 
+        #import pdb; pdb.set_trace()
         url = node2_url + '/BatchAddStatement/' + bridge_entity+'/'
         data = json.dumps({'predicates':pred_node2, 'values':val_node2})
 
@@ -90,14 +89,15 @@ class ReplicationTestCase(unittest.TestCase):
         url = node1_url + '/BatchAddStatement/' + bridge_entity +'/'
         data = json.dumps({'predicates':pred_node1, 'values':val_node1})
 
-        executor1 = concurrent.futures.ProcessPoolExecutor(max_workers=1)
-        future = executor1.submit(requests.post,url,data)
+        executor2 = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        future = executor2.submit(requests.post,url,data)
 
         req_start = time.time()
         # at this point, node1 and node2 are inserting statements in their public stores.
         # they should be replicated to the bridge's cache, and then to the caches of the nodes
         # we want to see how many are in node2's cache from those sent to node1 and vice-versa
 
+        #import pdb; pdb.set_trace()
         total_time = 50
         while time.time() - req_start < total_time:
             print '-------------------------------------------'
@@ -125,6 +125,12 @@ class ReplicationTestCase(unittest.TestCase):
             print '-------------------------------------------'
             print "\n"
             time.sleep(1)
+        #import pdb; pdb.set_trace()
+
+        #clean_db
+        resp1 = requests.get(node1_url + '/ResetDb')
+        resp1 = requests.get(node2_url + '/ResetDb')
+        resp1 = requests.get(bridge_url+ '/ResetDb')
 
 
         #stop everything
@@ -153,8 +159,6 @@ class ReplicationTestCase(unittest.TestCase):
         self.assertEqual(resp2.status_code, 200)
         self.assertTrue(resp2.content.startswith('ERS web interface running'))
 
-        #wait for the connection to be setup
-        time.sleep(2)
 
         #clean_db
         resp1 = requests.get(node1_url + '/ResetDb')
@@ -166,6 +170,7 @@ class ReplicationTestCase(unittest.TestCase):
         resp1 = requests.get(node1_url + '/AddStatement/' + test_entity + '/rdf:type/foaf:LocalAgent')
         resp2 = requests.get(node2_url + '/AddStatement/' + test_entity + '/rdf:type/foaf:RemoteAgent')
         document_id = resp2.content.split()[-2]
+        import pdb;pdb.set_trace()
 
         #update replication links to link the doc on node 2 public to doc on node1 cache
         resp = requests.get(node1_url + '/Get/' + test_entity)
@@ -272,6 +277,9 @@ class ReplicationTestCase(unittest.TestCase):
             time.sleep(0.5)
 
 
+        #clean_db
+        resp1 = requests.get(node1_url + '/ResetDb')
+        resp1 = requests.get(node2_url + '/ResetDb')
 
         resp = requests.get(node1_url + '/StopDaemon/' + d1_pid)
         resp = requests.get(node2_url + '/StopDaemon/' + d2_pid)

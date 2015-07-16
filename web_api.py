@@ -44,9 +44,12 @@ def stop_daemon(pid):
     try:
         killedpid, stat = os.waitpid(pid, os.WNOHANG)
         if killedpid == 0:
-            return 'process failed to kill'
+            return 'daemon failed to kill'
     except:
-        return 'process killed'
+        pass
+    from daemon import FLASK_PORT
+    requests.get('http://localhost:'+str(FLASK_PORT)+"/Stop")
+    return 'daemon killed'
 
 
 @app.route('/ServiceStoreAccess')
@@ -84,7 +87,7 @@ def batch_add_statement(entity):
         val = values[i]
         add_statement(entity, pred, val)
         import time
-        time.sleep(0.3)
+        time.sleep(1)
     return 'batch added'
 
 @app.route('/AddStatement/<entity>/<predicate>/<value>')
@@ -179,6 +182,6 @@ def search(prop, val):
     return str(list_of_entities)
 
 if __name__ == '__main__':
-    app.debug = True
+    #app.debug = True
 
     app.run(host='0.0.0.0', threaded=True)
