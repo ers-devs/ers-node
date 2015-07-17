@@ -221,7 +221,7 @@ class ERS(ERSReadOnly):
                 self.store[ERS_PUBLIC_DB].save(doc)
             elif scope == 'private':
                 self.store[ERS_PRIVATE_DB].save(doc)
-            self.trigger_replication_update()
+        self.trigger_replication_update()
 
     def cache_entity(self, entity):
         '''
@@ -232,11 +232,12 @@ class ERS(ERSReadOnly):
         @param entity An entity object
         '''
         # No point in caching it again
-        if self.is_cached(entity.get_entity_name()):
-            return
+        #if self.is_cached(entity.get_entity_name()):
+        #    return
 
         # Save all its current documents in the cache
         for document in entity.get_documents('remote'):
+
             self.store[ERS_CACHE_DB].save(document.to_json())
 
         self.trigger_replication_update()

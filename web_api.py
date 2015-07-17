@@ -13,6 +13,8 @@ import json
 import os
 import subprocess
 import signal
+from ers.daemon import FLASK_PORT
+from couchdb.client import Server
 
 interface = Interface()
 TEST_ENTITY = "urn:ers:test"
@@ -47,14 +49,12 @@ def stop_daemon(pid):
             return 'daemon failed to kill'
     except:
         pass
-    from daemon import FLASK_PORT
     requests.get('http://localhost:'+str(FLASK_PORT)+"/Stop")
     return 'daemon killed'
 
 
 @app.route('/ServiceStoreAccess')
 def service_store_access():
-    from couchdb.client import Server
     DEFAULT_STORE_ADMIN_URI = 'http://admin:admin@127.0.0.1:5984'
     server = Server(DEFAULT_STORE_ADMIN_URI)
     import pdb; pdb.set_trace()

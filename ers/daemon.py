@@ -31,6 +31,11 @@ import gobject
 from zeroconf import ERSPeerInfo
 from store import ERS_PUBLIC_DB, ERS_CACHE_DB, ERS_STATE_DB
 
+import requests
+from flask import Flask, request
+import threading
+from copy import deepcopy
+
 log = logging.getLogger('ers')
 FLASK_PORT = 5678
 
@@ -106,6 +111,10 @@ class ERSDaemon(object):
     _active = False
     _service = None
     _monitor = None
+    #this maintains some basic state. 
+    #we don't want to do too many updates to the replicator database
+    #because it might stop current replications
+    _old_replication_docs = {}
 
     # List of all peers, contributor and bridges
     _peers = {
@@ -270,6 +279,7 @@ class ERSDaemon(object):
         # List of replication rules
         docs = {}
 
+        cache_contents = self._store.cache_contents()
         # If there is at least one bridge in the neighbourhood focus on it
         # otherwise establish rules with all the contributors
         if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
@@ -298,7 +308,6 @@ class ERSDaemon(object):
             # Synchronise local cache and bridge cache
             # TODO
         else:
-            cache_contents = self._store.cache_contents()
             #if cache_contents:
             # Synchronise all the cached documents with the peers
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
@@ -310,10 +319,10 @@ class ERSDaemon(object):
                     'continuous': True,
                     #'doc_ids' : cache_contents
                 }
+                #if a regular peer, only sync cached documents.
+                #as a bridge, we pull evertyhing
                 if self.peer_type == ERS_PEER_TYPE_CONTRIB:
                     docs[doc_id]['doc_ids'] = cache_contents
-                #if i am a regular peer, only sync cached documents.
-                #as a bridge, we pull evertyhing
 
             # Get update from their public documents we have cached
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
@@ -325,6 +334,8 @@ class ERSDaemon(object):
                     'continuous': True,
                     #'doc_ids' : cache_contents
                 }
+                #if a regular peer, only sync cached documents.
+                #as a bridge, we pull evertyhing
                 if self.peer_type == ERS_PEER_TYPE_CONTRIB:
                     docs[doc_id]['doc_ids'] = cache_contents
 
@@ -335,7 +346,10 @@ class ERSDaemon(object):
         # add one more rule to do that
 
         # Apply sync rules
-        self._set_replication_documents(docs)
+        if self._old_replication_docs != docs:
+            self._old_replication_docs = deepcopy(docs)
+
+            self._set_replication_documents(docs)
 
     def _clear_replication_documents(self):
         self._set_replication_documents({})
@@ -366,7 +380,6 @@ class ERSDaemon(object):
 
 daemon = None
 
-from flask import Flask, request
 app = Flask(__name__)
 
 @app.route('/ReplicationLinksUpdate')
@@ -411,20 +424,16 @@ def run():
 
         def sig_handler(sig, frame):
             mainloop.quit()
-        def usr_sig_handler(sig, frame):
-            daemon.update_replication_links()
+        try:
+            requests.get('http://localhost:'+str(FLASK_PORT)+'/Stop')
+        except Exception as e:
+            pass
+
+
         signal.signal(signal.SIGQUIT, sig_handler)
         signal.signal(signal.SIGTERM, sig_handler)
-        signal.signal(signal.SIGUSR2, usr_sig_handler)
-        # Initialise the web interface handler
-        #application = web.Application([
-        #    (r"/api/(.*)", WebAPIHandler),
-        #    (r"/(.*)", web.StaticFileHandler, {'path': 'www', 'default_filename' : 'index.html'}),
-        #])
-        #application.listen(8888, address="127.0.0.1")
 
         # Start the main loop
-        import threading
         thread = threading.Thread(target = run_flask)
         thread.start()
         mainloop = gobject.MainLoop()
@@ -435,7 +444,6 @@ def run():
     except (KeyboardInterrupt, SystemExit):
         if mainloop is not None:
             mainloop.quit()
-        import requests
         requests.get('http://localhost:'+str(FLASK_PORT)+'/Stop')
     except RuntimeError as e:
         log.critical(str(e))

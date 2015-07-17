@@ -11,6 +11,14 @@ node2_url = "http://172.28.128.166" + ':' + webserver_port
 bridge_url = "http://172.28.128.170" + ':' + webserver_port
 test_entity = "urn:ers:test"
 
+def get_nr_documents(entity_id, predicate, base_url, database_name):
+    # helper function
+    url = base_url + '/ShowDoc/' + database_name + '/' +entity_id + '/' + predicate
+    resp = requests.get(url)
+    nr_values = int(resp.content)
+    return nr_values
+
+
 
 
 class ReplicationTestCase(unittest.TestCase):
@@ -40,7 +48,6 @@ class ReplicationTestCase(unittest.TestCase):
         self.assertEqual(resp2.status_code, 200)
         d2_pid = resp2.content
         print "daemon started with pid " + d2_pid
-        #import pdb; pdb.set_trace()
 
         #clean_db
         resp1 = requests.get(node1_url + '/ResetDb')
@@ -48,14 +55,14 @@ class ReplicationTestCase(unittest.TestCase):
         resp1 = requests.get(bridge_url+ '/ResetDb')
 
         bridge_entity = "urn:ers:bridge_entity"
-        #import pdb; pdb.set_trace()
 
+        test_pred = 'rdf:comment'
         #add statements
-        resp1 = requests.get(node1_url + '/AddStatement/' + bridge_entity+ '/rdf:comment/random:node1')
+        resp1 = requests.get(node1_url + '/AddStatement/' + bridge_entity+ '/' +test_pred + '/random:node1')
         document_id_node1 = resp1.content.split()[-2]
         print "node1 public document id : " + str(document_id_node1)
 
-        resp2 = requests.get(node2_url + '/AddStatement/' + bridge_entity+ '/rdf:comment/random:node2')
+        resp2 = requests.get(node2_url + '/AddStatement/' + bridge_entity+ '/' + test_pred  + '/random:node2')
         document_id_node2 = resp2.content.split()[-2]
         print "node2 public document id : " + str(document_id_node2)
 
@@ -73,13 +80,12 @@ class ReplicationTestCase(unittest.TestCase):
         pred_node2 = []
         val_node2 = []
         for i in range(0, replication_statements):
-            pred_node1.append('rdf:comment')
+            pred_node1.append(test_pred)
             val_node1.append('replication:node1_' + str(i))
 
-            pred_node2.append('rdf:comment')
+            pred_node2.append(test_pred)
             val_node2.append('replication:node2_' + str(i))
 
-        #import pdb; pdb.set_trace()
         url = node2_url + '/BatchAddStatement/' + bridge_entity+'/'
         data = json.dumps({'predicates':pred_node2, 'values':val_node2})
 
@@ -97,35 +103,25 @@ class ReplicationTestCase(unittest.TestCase):
         # they should be replicated to the bridge's cache, and then to the caches of the nodes
         # we want to see how many are in node2's cache from those sent to node1 and vice-versa
 
-        #import pdb; pdb.set_trace()
         total_time = 50
         while time.time() - req_start < total_time:
             print '-------------------------------------------'
-            url = node2_url + '/ShowDoc/ers-public/' + document_id_node2 + '/rdf:comment'
-            resp = requests.get(url)
-            nr_values = int( resp.content)
+            nr_values = get_nr_documents(document_id_node2, test_pred, node2_url, 'ers-public')
             print "node 2 public after {} nr_values:{} ".format(time.time() - req_start, nr_values)
 
-            url = node1_url + '/ShowDoc/ers-cache/' + document_id_node1 + '/rdf:comment'
-            resp = requests.get(url)
-            nr_values = int( resp.content)
+            nr_values = get_nr_documents(document_id_node2, test_pred, node1_url, 'ers-cache')
             print "node 1 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
 
             print "\n"
 
-            url = node1_url + '/ShowDoc/ers-public/' + document_id_node1 + '/rdf:comment'
-            resp = requests.get(url)
-            nr_values = int( resp.content)
+            nr_values = get_nr_documents(document_id_node1, test_pred, node1_url, 'ers-public')
             print "node 1 public after {} nr_values:{} ".format(time.time() - req_start, nr_values)
 
-            url = node2_url + '/ShowDoc/ers-cache/' + document_id_node2 + '/rdf:comment'
-            resp = requests.get(url)
-            nr_values = int( resp.content)
+            nr_values = get_nr_documents(document_id_node1, test_pred, node2_url, 'ers-cache')
             print "node 2 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
             print '-------------------------------------------'
             print "\n"
             time.sleep(1)
-        #import pdb; pdb.set_trace()
 
         #clean_db
         resp1 = requests.get(node1_url + '/ResetDb')
@@ -170,7 +166,6 @@ class ReplicationTestCase(unittest.TestCase):
         resp1 = requests.get(node1_url + '/AddStatement/' + test_entity + '/rdf:type/foaf:LocalAgent')
         resp2 = requests.get(node2_url + '/AddStatement/' + test_entity + '/rdf:type/foaf:RemoteAgent')
         document_id = resp2.content.split()[-2]
-        import pdb;pdb.set_trace()
 
         #update replication links to link the doc on node 2 public to doc on node1 cache
         resp = requests.get(node1_url + '/Get/' + test_entity)
