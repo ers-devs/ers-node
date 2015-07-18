@@ -1,6 +1,7 @@
 from ers import ERS
 from ers import store
 import unittest
+from mock import patch
 
 TEST_ENTITY = "urn:ers:test"
 
@@ -12,8 +13,8 @@ class APITestCase(unittest.TestCase):
         self.ers = ERS()
     def tearDown(self):
         self.ers.reset()
-
-    def testInsertion(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testInsertion(self, repl_update):
         entity = self.ers.get(TEST_ENTITY)
         predicate = "rdf:type"
         value = "ers:TestCase"
@@ -37,7 +38,8 @@ class APITestCase(unittest.TestCase):
         self.assertEqual(inserted_tuple[0], predicate)
         self.assertEqual(inserted_tuple[1], value)
 
-    def testEntityDeletion(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testEntityDeletion(self, repl_update):
         entity = self.ers.get(TEST_ENTITY)
         predicate = "rdf:type"
         value = "ers:TestCase"
@@ -50,7 +52,8 @@ class APITestCase(unittest.TestCase):
         result = self.ers.entity_exist(TEST_ENTITY)
         self.assertFalse(result)
 
-    def testPropertyDeletion(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testPropertyDeletion(self, repl_update):
         entity = self.ers.get(TEST_ENTITY)
         predicate = "rdf:type"
         private = False
@@ -69,7 +72,8 @@ class APITestCase(unittest.TestCase):
         self.assertEqual(len(tuples), 0)
 
 
-    def testPropertyDeletionTwoValues(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testPropertyDeletionTwoValues(self, repl_update):
         entity = self.ers.get(TEST_ENTITY)
         predicate = "rdf:type"
         value = "ers:TestCase"
@@ -94,7 +98,8 @@ class APITestCase(unittest.TestCase):
         self.assertEqual(tuples[0][1], value)
 
 
-    def testSearchMatchingMultipleItems(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testSearchMatchingMultipleItems(self, repl_update):
         entity = self.ers.get(TEST_ENTITY)
         predicate = "rdf:type"
         value = "ers:TestCase"
@@ -110,7 +115,8 @@ class APITestCase(unittest.TestCase):
         list_of_entities = self.ers.search(predicate, value)
         self.assertEqual(sorted(list_of_entities), sorted([TEST_ENTITY, test_entity_2]))
 
-    def testBadSearch(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testBadSearch(self, repl_update):
         entity = self.ers.get(TEST_ENTITY)
         predicate = "rdf:type"
         value = "ers:TestCase"
@@ -126,7 +132,8 @@ class APITestCase(unittest.TestCase):
         list_of_entities = self.ers.search(predicate, "random_value")
         self.assertEqual(len(list_of_entities), 0)
 
-    def testSearchSingleItem(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testSearchSingleItem(self, repl_update):
         entity = self.ers.get(TEST_ENTITY)
         predicate = "rdf:type"
         value = "ers:TestCase"
@@ -147,8 +154,9 @@ class APITestCase(unittest.TestCase):
         self.assertEqual(list_of_entities[0], TEST_ENTITY)
 
 
-    def testEntityTwoValues(self):
-        entity = self.ers.get(TEST_ENTITY)
+    @patch('ers.ERS.trigger_replication_update')
+    def testEntityTwoValues(self, repl_update):
+        entity = self.ers.get(TEST_ENTITY, repl_update)
         predicate = "rdf:type"
         value = "ers:TestCase"
         private = False
@@ -169,7 +177,8 @@ class APITestCase(unittest.TestCase):
         self.assertEqual(len(list_of_entities), 1)
         self.assertEqual(list_of_entities[0], TEST_ENTITY)
 
-    def testMultipleInsertion(self):
+    @patch('ers.ERS.trigger_replication_update')
+    def testMultipleInsertion(self, repl_update):
         predicate = "rdf:type"
         value = "ers:TestCase"
         private = False

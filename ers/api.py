@@ -180,7 +180,6 @@ class ERS(ERSReadOnly):
         self.store.reset()
 
     def trigger_replication_update(self):
-        #signal replication
         requests.get('http://localhost:'+str(FLASK_PORT)+'/ReplicationLinksUpdate')
         return 1
 

@@ -148,6 +148,7 @@ class ERSDaemon(object):
         # so we must add some unique identifier
         # uuid4 guarantees unique identifiers, but we cannot fit the whole 32 characters otherwise the name becomes too long
         # thus, we only choose the first 20 and hope there will be no collisions
+        # CAREFULL: service name has an upper bound on length.
         service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname() + str(uuid.uuid4())[:20], self.prefix, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
         self._service.publish()
@@ -274,7 +275,11 @@ class ERSDaemon(object):
         log.debug("Update replication documents")
 
         # Clear all the previous replicator documents
-        self._clear_replication_documents()
+        #WHY
+        #self._clear_replication_documents()
+        # TODO
+        # we should probably add a little caching. it makes no sense to build this list
+        # of replication documents if peers and cache haven't changed
 
         # List of replication rules
         docs = {}
@@ -311,7 +316,7 @@ class ERSDaemon(object):
             #if cache_contents:
             # Synchronise all the cached documents with the peers
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                doc_id = 'ers-{2}-get-from-cache-of-{0}:{1}'.format(peer.ip, peer.port,socket.gethostname())
+                doc_id = 'ers-{2}-pull-from-cache-of-{0}:{1}'.format(peer.ip, peer.port,socket.gethostname())
                 docs[doc_id] = {
                     '_id': doc_id,
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
@@ -326,7 +331,7 @@ class ERSDaemon(object):
 
             # Get update from their public documents we have cached
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                doc_id = 'ers-{2}-auto-get-from-public-of-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
+                doc_id = 'ers-{2}-auto-pull-from-public-of-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
                 docs[doc_id] = {
                     '_id': doc_id,
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
@@ -340,16 +345,15 @@ class ERSDaemon(object):
                     docs[doc_id]['doc_ids'] = cache_contents
 
 
-        log.debug(docs)
 
         # If this node is a bridge configured to push data to an aggregator
         # add one more rule to do that
 
         # Apply sync rules
-        if self._old_replication_docs != docs:
-            self._old_replication_docs = deepcopy(docs)
 
-            self._set_replication_documents(docs)
+        log.debug(docs)
+
+        self._set_replication_documents(docs)
 
     def _clear_replication_documents(self):
         self._set_replication_documents({})
@@ -386,6 +390,7 @@ app = Flask(__name__)
 def update_replication_links_api():
     global daemon
     daemon._update_replication_links()
+
     return 'Replication links updated'
 
 
@@ -401,6 +406,8 @@ def stop_server():
     return 'Server shutting down'
 
 def run_flask():
+    from werkzeug.serving import run_simple
+    #run_simple('localhost', FLASK_PORT, app)
     app.run(port=FLASK_PORT, threaded = True)
 
 def run():

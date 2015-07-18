@@ -1,4 +1,5 @@
 import requests
+from multiprocessing import Process
 import concurrent.futures
 import time
 import json
@@ -17,8 +18,10 @@ def get_nr_documents(entity_id, predicate, base_url, database_name):
     resp = requests.get(url)
     nr_values = int(resp.content)
     return nr_values
-
-
+def service_store_access(base_url):
+    url = base_url + '/ServiceStoreAccess'
+    resp = requests.get(url)
+    return True
 
 
 class ReplicationTestCase(unittest.TestCase):
@@ -49,11 +52,15 @@ class ReplicationTestCase(unittest.TestCase):
         d2_pid = resp2.content
         print "daemon started with pid " + d2_pid
 
+        time.sleep(2)
         #clean_db
-        resp1 = requests.get(node1_url + '/ResetDb')
-        resp1 = requests.get(node2_url + '/ResetDb')
-        resp1 = requests.get(bridge_url+ '/ResetDb')
+        #resp1 = requests.get(node1_url + '/ResetDb')
+        #time.sleep(1)
+        #resp1 = requests.get(node2_url + '/ResetDb')
+        #time.sleep(1)
+        #resp1 = requests.get(bridge_url+ '/ResetDb')
 
+        #time.sleep(3)
         bridge_entity = "urn:ers:bridge_entity"
 
         test_pred = 'rdf:comment'
@@ -67,14 +74,14 @@ class ReplicationTestCase(unittest.TestCase):
         print "node2 public document id : " + str(document_id_node2)
 
         #update replication links to link the doc on node 2 public to doc on node1 cache
-        resp = requests.get(node1_url + '/Get/' + bridge_entity)
+        #resp = requests.get(node1_url + '/Get/' + bridge_entity)
         resp = requests.get(node1_url + '/CacheEntity/' + bridge_entity)
 
 
-        resp = requests.get(node2_url + '/Get/' + bridge_entity)
+        #resp = requests.get(node2_url + '/Get/' + bridge_entity)
         resp = requests.get(node2_url + '/CacheEntity/' + bridge_entity)
 
-        replication_statements = 50
+        replication_statements = 20
         pred_node1 = []
         val_node1 = []
         pred_node2 = []
@@ -103,7 +110,7 @@ class ReplicationTestCase(unittest.TestCase):
         # they should be replicated to the bridge's cache, and then to the caches of the nodes
         # we want to see how many are in node2's cache from those sent to node1 and vice-versa
 
-        total_time = 50
+        total_time = 10
         while time.time() - req_start < total_time:
             print '-------------------------------------------'
             nr_values = get_nr_documents(document_id_node2, test_pred, node2_url, 'ers-public')
@@ -121,7 +128,7 @@ class ReplicationTestCase(unittest.TestCase):
             print "node 2 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
             print '-------------------------------------------'
             print "\n"
-            time.sleep(1)
+            time.sleep(0.5)
 
         #clean_db
         resp1 = requests.get(node1_url + '/ResetDb')
@@ -133,6 +140,98 @@ class ReplicationTestCase(unittest.TestCase):
         resp = requests.get(node1_url + '/StopDaemon/' + d1_pid)
         resp = requests.get(node2_url + '/StopDaemon/' + d2_pid)
         resp = requests.get(bridge_url+ '/StopDaemon/' + d3_pid)
+
+    def test2NodesWrite(self):
+        # start daemons
+        resp1 = requests.get(node1_url + '/StartDaemon')
+        self.assertEqual(resp1.status_code, 200)
+        d1_pid = resp1.content
+        print "daemon started with pid " + d1_pid
+
+        resp2 = requests.get(node2_url + '/StartDaemon')
+        self.assertEqual(resp2.status_code, 200)
+        d2_pid = resp2.content
+        print "daemon started with pid " + d2_pid
+
+        #check to see that the web apis are running on the nodes
+        resp1 = requests.get(node1_url + '/')
+        self.assertEqual(resp1.status_code, 200)
+        self.assertTrue(resp1.content.startswith('ERS web interface running'))
+
+        resp2 = requests.get(node2_url + '/')
+        self.assertEqual(resp2.status_code, 200)
+        self.assertTrue(resp2.content.startswith('ERS web interface running'))
+
+
+        time.sleep(3)
+
+        #add statements
+        resp1 = requests.get(node1_url + '/AddStatement/' + test_entity + '/rdf:type/foaf:LocalAgent')
+        document_id_node1 = resp1.content.split()[-2]
+        resp2 = requests.get(node2_url + '/AddStatement/' + test_entity + '/rdf:type/foaf:RemoteAgent')
+        document_id_node2 = resp2.content.split()[-2]
+
+        #update replication links to link the doc on node 2 public to doc on node1 cache
+
+        resp = requests.get(node1_url + '/CacheEntity/' + test_entity)
+        resp = requests.get(node2_url + '/CacheEntity/' + test_entity)
+
+        initial_statements = 2
+        replication_statements = 30
+
+        both_working = 20
+        node2_alone = 25
+        total_time = 70
+
+        pred =[]
+        vals_node1 = []
+        vals_node2 = []
+        for i in range(0, replication_statements):
+            pred.append('rdf:type')
+            vals_node1.append('foaf:RemoteAgent_node1_' + str(i))
+            vals_node2.append('foaf:RemoteAgent_node2_' + str(i))
+
+
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+        url = node1_url + '/BatchAddStatement/' + test_entity +'/'
+        data = json.dumps({'predicates':pred, 'values':vals_node1})
+
+
+        p = Process(target=requests.post, args=(url, data))
+        p.start()
+
+        url = node2_url + '/BatchAddStatement/' + test_entity +'/'
+        data = json.dumps({'predicates':pred, 'values':vals_node2})
+
+        p = Process(target=requests.post, args=(url, data))
+        p.start()
+
+        req_start = time.time()
+
+
+        #the public statements on node2 should be in node1's cache
+        #run for 10 seconds
+        test_pred = "rdf:type"
+        while time.time() - req_start < both_working:
+            nr_values = get_nr_documents(document_id_node2, test_pred, node2_url, 'ers-public')
+            print "node 2 public after {} nr_values:{} ".format(time.time() - req_start, nr_values)
+
+            nr_values = get_nr_documents(document_id_node1, test_pred, node2_url, 'ers-cache')
+            print "node 2 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
+            nr_values = get_nr_documents(document_id_node1, test_pred, node1_url, 'ers-public')
+            print "node 1 public after {} nr_values:{} ".format(time.time() - req_start, nr_values)
+            nr_values = get_nr_documents(document_id_node2, test_pred, node1_url, 'ers-cache')
+            print "node 1 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
+            time.sleep(0.5)
+
+
+        #clean_db
+        resp1 = requests.get(node1_url + '/ResetDb')
+        resp1 = requests.get(node2_url + '/ResetDb')
+
+        resp = requests.get(node1_url + '/StopDaemon/' + d1_pid)
+        resp = requests.get(node2_url + '/StopDaemon/' + d2_pid)
+
 
     def testSameDocPropertyReplication(self):
         # start daemons
@@ -156,9 +255,6 @@ class ReplicationTestCase(unittest.TestCase):
         self.assertTrue(resp2.content.startswith('ERS web interface running'))
 
 
-        #clean_db
-        resp1 = requests.get(node1_url + '/ResetDb')
-        resp1 = requests.get(node2_url + '/ResetDb')
         #wait for resetting to finish
         time.sleep(2)
 
@@ -177,21 +273,27 @@ class ReplicationTestCase(unittest.TestCase):
         initial_statements = 2
         replication_statements = 100
 
-        both_working = 10
+        both_working = 20
+
         node2_alone = 25
         total_time = 70
 
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)
         pred =[]
-        vals = []
+        vals_node1 = []
+        vals_node2 = []
         for i in range(0, replication_statements):
             pred.append('rdf:type')
-            vals.append('foaf:RemoteAgent' + str(i))
+            vals_node1.append('foaf:RemoteAgent_node1_' + str(i))
+            vals_node2.append('foaf:RemoteAgent_node2_' + str(i))
 
         url = node2_url + '/BatchAddStatement/' + test_entity +'/'
-        data = json.dumps({'predicates':pred, 'values':vals})
+        data = json.dumps({'predicates':pred, 'values':vals_node1})
 
-        future = executor.submit(requests.post,url,data)
+        p = Process(target=requests.post, args=(url, data))
+        p.start()
+        requests.post(url, data)
+
+
         req_start = time.time()
 
 
@@ -208,6 +310,7 @@ class ReplicationTestCase(unittest.TestCase):
             nr_values = int( resp.content)
             print "node 1 cache after {} nr_values:{} ".format(time.time() - req_start, nr_values)
             time.sleep(0.5)
+
 
         #stop node 1
         resp = requests.get(node1_url + '/StopDaemon/' + d1_pid)

@@ -15,6 +15,8 @@ from couchdb import http
 import copy
 from operator import getitem
 
+from copy import deepcopy
+
 REMOTE_SERVER_TIMEOUT = 0.3
 
 DEFAULT_STORE_URI = 'http://127.0.0.1:5984'
@@ -263,25 +265,109 @@ class ServiceStore(Store):
 
     def replicator_docs(self):
         #map_fun = '''function(r) {emit (r['id'], r['value']['rev'])}'''
+        repl_docs = []
+        db_docs = self.replicator.view('_all_docs', include_docs = True, startkey = 'ers-').rows
+        for doc in db_docs:
+            doc_fields = []
+            full_doc = doc['doc']
+            doc_fields.append(full_doc['_id'])
+            doc_fields.append(full_doc['_rev'])
+            if 'doc_ids' in full_doc:
+                doc_fields.append(full_doc['doc_ids'])
+            else:
+                doc_fields.append(None)
 
-        return map(lambda x: [x['id'], x['value']['rev']], self.replicator.view('_all_docs', startkey = 'ers-').rows)
-        #return self.replicator.view('_all_docs', startkey = 'ers-')
-        #return self.replicator.query(map_fun, startkey=u"ers-", endkey=u"ers-\ufff0")
+            repl_docs.append(doc_fields)
+
+        return repl_docs
+
+
+        #return map(lambda x: [x['id'], x['value']['rev']], self.replicator.view('_all_docs', startkey = 'ers-').rows)
 #        return self.replicator.all_docs(
 #                        startkey=u"ers-auto-",
 #                        endkey=u"ers-auto-\ufff0",
 #                        wrapper = lambda r: (r['id'], r['value']['rev']))
 
     def update_replicator_docs(self, repl_docs):
-        for doc_id, doc_rev in self.replicator_docs():
+        '''
+            Since it is impossible to change the value of replication docs, but cancelling
+            deleting replication documents cancels a replication, we need a bit of extra
+            logic in managing them.
+
+            first, always delete replication docs to nodes that are no longer connected.
+
+            if there is a repl doc for a node still connected, leave it if no "doc_ids"
+            have changed.
+
+            if the "doc_ids" have changed, delete the old repl_doc and insert the new one
+
+            # TODO now it's "all or nothing". Perhaps should be changed to individual doc
+            # also, maybe add "last resort" : clear all replication documents and set new ones
+        '''
+        nr_tries = 4
+
+        new_docs = {}
+
+        for doc_id, doc_rev, replicated_docs_ids in self.replicator_docs():
             if doc_id in repl_docs:
-                repl_docs[doc_id]['_rev'] = doc_rev
+                # if it is a replication document that is present both in the
+                # new set and in the database
+                if 'doc_ids' in repl_docs[doc_id]:
+                    #we only care about filtered replication
+                    new_doc_ids = repl_docs[doc_id]['doc_ids']
+                    if new_doc_ids != replicated_docs_ids:
+                        # different doc ids, we have to stop the old replication
+                        # delete old one, insert new one
+                        new_docs[doc_id] = deepcopy(repl_docs[doc_id])
+
+                        if '_rev' in new_docs[doc_id]:
+                            del new_docs[doc_id]['_rev']
+
+                        repl_docs[doc_id] = {"_id": doc_id, "_rev": doc_rev, "_deleted": True}
+                    else:
+                        # do nothing to the old document(i.e. remove from repl_docs)
+                        del repl_docs[doc_id]
+                else:
+                    #if it's not filtered replication no need to change the document
+                    del repl_docs[doc_id]
             else:
+                #if an old replication doc, remove it
                 repl_docs[doc_id] = {"_id": doc_id, "_rev": doc_rev, "_deleted": True}
-        try:
-            self.replicator.update(repl_docs.values())
-        except TypeError as e:
-            print "Error while trying to update replicator docs: {}".format(str(e))
+
+        #out with the old, in with the new!
+        save_with_retries(repl_docs, self.replicator, nr_tries)
+        save_with_retries(new_docs, self.replicator, nr_tries)
+
+
+def save_with_retries(doc_dict, database, nr_tries):
+    # we could first try a batch update, and if that fails, retry those that failed
+    result = database.update(doc_dict.values())
+    all_ok = all(map(lambda x: x[0], result))
+    if all_ok:
+        return
+    #the structure of the tuples in result is (SuccceededBoolean, id, revision)
+    #if it failed, revision instead shows the reason
+    for individual_result in result:
+        if individual_result[0] == False:
+            #it failed in the batch
+            document_id = individual_result[1]
+            for i in range(nr_tries):
+                #try to save nr_tries times
+                new_rev = database[document_id]['_rev']
+                new_doc = doc_dict[document_id]
+                new_doc['_rev'] = new_rev
+                try:
+                    database[document_id] = new_doc
+                except Exception as e:
+                    continue
+                except TypeError as e:
+                    print "Error while trying to update replicator docs: {}".format(str(e))
+
+                #if we get here, we have succeeded or failed due to a type error.
+                #either way, no point in trying again so break out of for loop
+                break
+
+
 
 
 RemoteStore = partial(Store)#, databases=REMOTE_DBS), timeout=REMOTE_SERVER_TIMEOUT)
@@ -292,9 +378,9 @@ def query_remote(uri, method_name, *args, **kwargs):
     remote_store = RemoteStore(uri)
     # TODO do we want to query both?
     remote_public = remote_store[ERS_PUBLIC_DB]
-    remote_cache = remote_store[ERS_CACHE_DB]
+    #remote_cache = remote_store[ERS_CACHE_DB]
     public_docs = getattr(remote_public, method_name)(*args, **kwargs).rows
-    cache_docs  = getattr(remote_cache , method_name)(*args, **kwargs).rows
-    return public_docs + cache_docs
+    #cache_docs  = getattr(remote_cache , method_name)(*args, **kwargs).rows
+    return public_docs
 
 
