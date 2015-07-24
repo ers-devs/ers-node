@@ -1,4 +1,4 @@
-import store
+from ers import store
 from couchdb.client import Database, Server
 
 from copy import deepcopy
