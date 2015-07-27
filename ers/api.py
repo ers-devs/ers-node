@@ -36,6 +36,7 @@ class ERSReadOnly(object):
         self._timeout_count = Counter()
         self.store = store.Store()
         self._init_host_urn()
+        self.peer_type = None
 
     def _init_host_urn(self):
         # Use uuid provided by CouchDB 1.3+, fallback to hostname fingerprint
@@ -44,6 +45,12 @@ class ERSReadOnly(object):
         except KeyError:
             uid = md5(gethostname()).hexdigest()
         self.host_urn = "urn:ers:host:{}".format(uid)
+
+    def get_peer_type():
+        if self.peer_type is None:
+            resp = requests.get('http://localhost:'+str(FLASK_PORT)+'/PeerType')
+            self.peer_type = resp.content
+        return self.peer_type
 
     def get_machine_uri(self):
         '''

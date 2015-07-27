@@ -111,7 +111,7 @@ class ERSDaemon(object):
     _active = False
     _service = None
     _monitor = None
-    #this maintains some basic state. 
+    #this maintains some basic state.
     #we don't want to do too many updates to the replicator database
     #because it might stop current replications
     _old_replication_docs = {}
@@ -392,6 +392,11 @@ def update_replication_links_api():
     daemon._update_replication_links()
 
     return 'Replication links updated'
+
+@app.route('/PeerType')
+def get_peer_type():
+    global daemon
+    return str(daemon.peer_type)
 
 
 def shutdown_server():
