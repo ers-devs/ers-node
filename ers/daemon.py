@@ -147,9 +147,9 @@ class ERSDaemon(object):
         # if the hostname is the same as another node, avahi will not pick up the service
         # so we must add some unique identifier
         # uuid4 guarantees unique identifiers, but we cannot fit the whole 32 characters otherwise the name becomes too long
-        # thus, we only choose the first 20 and hope there will be no collisions
+        # thus, we only choose the first 10 and hope there will be no collisions
         # CAREFULL: service name has an upper bound on length.
-        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname() + str(uuid.uuid4())[:20], self.prefix, self.peer_type)
+        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname() + str(uuid.uuid4())[:10], self.prefix, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
         self._service.publish()
 
