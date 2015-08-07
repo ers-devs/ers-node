@@ -380,8 +380,6 @@ def query_remote(uri, method_name, *args, **kwargs):
     # TODO do we want to query both?
     remote_public = remote_store[ERS_PUBLIC_DB]
     #remote_cache = remote_store[ERS_CACHE_DB]
-    public_docs = getattr(remote_public, method_name)(*args, **kwargs).rows
+    public_docs = getattr(remote_public, method_name)(*args, **kwargs)
     #cache_docs  = getattr(remote_cache , method_name)(*args, **kwargs).rows
     return public_docs
-
-
