@@ -86,24 +86,25 @@ class ERSDatabase(Database):
 
     """docstring for ERSDatabase"""
     def docs_by_entity(self, entity_name):
+        import pdb; pdb.set_trace()
         return self.view('index/by_entity',
                         wrapper=lambda r: r['doc'],
                         key=entity_name,
-                        include_docs=True)
+                        include_docs=True).rows
 
     def by_entity(self, entity_name):
         return self.view('index/by_entity',
-                        key=entity_name)
+                        key=entity_name).rows
 
     def entity_exist(self, entity_name):
-        return len(self.view('index/by_entity', key=entity_name)) > 0
+        return len(self.view('index/by_entity', key=entity_name).rows) > 0
 
     def by_property(self, prop):
         # TODO add offset and limit
         return self.view('index/by_property_value',
                         startkey=[prop],
                         endkey=[prop, {}],
-                        wrapper=lambda r: r['value'])
+                        wrapper=lambda r: r['value']).rows
 
     def by_property_value(self, prop, value=None):
         # TODO add offset and limit
@@ -112,7 +113,7 @@ class ERSDatabase(Database):
             return self.by_property(prop)
         return self.view('index/by_property_value',
                         key=[prop, value],
-                        wrapper=lambda r: r['value'])
+                        wrapper=lambda r: r['value']).rows
 
     def delete_entity(self, entity_name):
         """ Delete an entity <entity_name>
