@@ -86,7 +86,6 @@ class ERSDatabase(Database):
 
     """docstring for ERSDatabase"""
     def docs_by_entity(self, entity_name):
-        import pdb; pdb.set_trace()
         return self.view('index/by_entity',
                         wrapper=lambda r: r['doc'],
                         key=entity_name,
