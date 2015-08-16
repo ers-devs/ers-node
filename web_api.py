@@ -125,6 +125,7 @@ def list_peers():
 @app.route('/ShowDB/<db_name>')
 def show_cache(db_name):
     entries = interface.ers.store[db_name].view('_all_docs').rows
+    return str(entries)
 
 @app.route('/ShowDoc/<db_name>/<doc_id>/<property_id>')
 def show_doc(db_name, doc_id, property_id):
