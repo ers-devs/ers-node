@@ -86,6 +86,7 @@ class ERSDatabase(Database):
 
     """docstring for ERSDatabase"""
     def docs_by_entity(self, entity_name):
+        import pdb; pdb.set_trace()
         return self.view('index/by_entity',
                         wrapper=lambda r: r['doc'],
                         key=entity_name,
@@ -379,8 +380,6 @@ def query_remote(uri, method_name, *args, **kwargs):
     # TODO do we want to query both?
     remote_public = remote_store[ERS_PUBLIC_DB]
     #remote_cache = remote_store[ERS_CACHE_DB]
-    public_docs = getattr(remote_public, method_name)(*args, **kwargs).rows
+    public_docs = getattr(remote_public, method_name)(*args, **kwargs)
     #cache_docs  = getattr(remote_cache , method_name)(*args, **kwargs).rows
     return public_docs
-
-
