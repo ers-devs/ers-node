@@ -152,7 +152,7 @@ def show_documents(db_name, entity_name):
     db_rows = db.view('index/by_entity', key = entity_name).rows
     document_ids = map(lambda x : x['id'], db_rows)
     doc_list = []
-    results = []
+    results = {}
     for doc_id in document_ids:
 
         doc = db[doc_id]
@@ -170,9 +170,9 @@ def show_documents(db_name, entity_name):
             # Decode the values
             if isinstance(values, list):
                 for value in values:
-                    results.append((key, decode_value(value, t)))
+                    results[key] = values
             else:
-                results.append((key, decode_value(values, t)))
+                results[key] = [values]
 
 
     return json.dumps(results)
