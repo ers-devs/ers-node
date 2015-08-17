@@ -305,7 +305,7 @@ class ERSDaemon(object):
                     'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
                     'target':self._store[ERS_CACHE_DB].name,
                     'continuous': True,
-                    'doc_ids': cache_contents,
+                    #'doc_ids': cache_contents,
                     # TODO add the option to not do it too often
                 }
 
@@ -326,8 +326,8 @@ class ERSDaemon(object):
                 }
                 #if a regular peer, only sync cached documents.
                 #as a bridge, we pull evertyhing
-                if self.peer_type == ERS_PEER_TYPE_CONTRIB:
-                    docs[doc_id]['doc_ids'] = cache_contents
+                #if self.peer_type == ERS_PEER_TYPE_CONTRIB:
+                #    docs[doc_id]['doc_ids'] = cache_contents
 
             # Get update from their public documents we have cached
             for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
@@ -341,8 +341,8 @@ class ERSDaemon(object):
                 }
                 #if a regular peer, only sync cached documents.
                 #as a bridge, we pull evertyhing
-                if self.peer_type == ERS_PEER_TYPE_CONTRIB:
-                    docs[doc_id]['doc_ids'] = cache_contents
+                #if self.peer_type == ERS_PEER_TYPE_CONTRIB:
+                #    docs[doc_id]['doc_ids'] = cache_contents
 
 
 
