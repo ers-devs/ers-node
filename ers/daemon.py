@@ -351,9 +351,10 @@ class ERSDaemon(object):
 
         # Apply sync rules
 
-        log.debug(docs)
-
-        self._set_replication_documents(docs)
+        if self._old_replication_docs != docs:
+            log.debug(docs)
+            self._set_replication_documents(docs)
+            self._old_replication_docs = deepcopy(docs)
 
     def _clear_replication_documents(self):
         self._set_replication_documents({})
