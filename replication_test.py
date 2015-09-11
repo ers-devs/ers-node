@@ -177,11 +177,11 @@ class ReplicationTestCase(unittest.TestCase):
         resp = requests.get(node2_url + '/CacheEntity/' + test_entity)
 
         initial_statements = 2
-        replication_statements = 30
+        replication_statements = 50
 
-        both_working = 20
-        node2_alone = 25
-        total_time = 70
+        both_working = 7
+        node2_alone = 15
+        total_time = 20
 
         pred =[]
         vals_node1 = []
@@ -271,12 +271,12 @@ class ReplicationTestCase(unittest.TestCase):
 
         # !!! important: initial replication is slow. After the first one, things go pretty smoothly.
         initial_statements = 2
-        replication_statements = 100
+        replication_statements = 50
 
-        both_working = 20
+        both_working = 7
 
-        node2_alone = 25
-        total_time = 70
+        node2_alone = 12
+        total_time = 15
 
         pred =[]
         vals_node1 = []
@@ -291,7 +291,6 @@ class ReplicationTestCase(unittest.TestCase):
 
         p = Process(target=requests.post, args=(url, data))
         p.start()
-        requests.post(url, data)
 
 
         req_start = time.time()
@@ -362,7 +361,7 @@ class ReplicationTestCase(unittest.TestCase):
         resp = requests.get(node2_url + '/Delete/' + test_entity)
         deletion_start = time.time()
 
-        while time.time() - deletion_start < 10:
+        while time.time() - deletion_start < 2:
             url = node2_url + '/ShowDoc/ers-public/' + document_id + '/rdf:type'
             resp = requests.get(url)
             nr_values = int( resp.content)
