@@ -27,7 +27,6 @@ before_script:
     - sudo apt-get install python-dbus
     - sudo apt-get install python-gobject
 
-script: 
 script:
   - python unit_tests.py
   - python test_store.py
