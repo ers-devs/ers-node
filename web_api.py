@@ -177,6 +177,12 @@ def show_documents(db_name, entity_name):
 
     return json.dumps(results)
 
+@app.route('/Search/<prop>/')
+def search_prop(prop):
+    list_of_entities = interface.search_for_entity(prop)
+    return str(list_of_entities)
+
+
 @app.route('/Search/<prop>/<val>')
 def search(prop, val):
     list_of_entities = interface.search_for_entity(prop, val)
