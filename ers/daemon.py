@@ -363,19 +363,22 @@ class ERSDaemon(object):
         self._store.update_replicator_docs(documents)
 
     def _update_cache(self):
-        cache_contents = self._store.cache_contents()
-        if not cache_contents:
-            return
-        for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-            for dbname in ('ers-public', 'ers-cache'):
-                source_db = r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
-                repl_doc = {
-                    'target': self._store[ERS_CACHE_DB].name,
-                    'source': source_db,
-                    'continuous': False,
-                    'doc_ids' : cache_contents
-                }
-                self._store.replicator.save(repl_doc)
+        return True
+        #disable
+
+        #cache_contents = self._store.cache_contents()
+        #if not cache_contents:
+        #    return
+        #for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+        #    for dbname in ('ers-public', 'ers-cache'):
+        #        source_db = r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
+        #        repl_doc = {
+        #            'target': self._store[ERS_CACHE_DB].name,
+        #            'source': source_db,
+        #            'continuous': False,
+        #            'doc_ids' : cache_contents
+        #        }
+        #        self._store.replicator.save(repl_doc)
 
     def _check_already_running(self):
         log.debug("Check if already running")
