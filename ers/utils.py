@@ -5,7 +5,7 @@ import rdflib
 
 def import_nt(registry, file_name, target_graph):
     """ Import N-Triples file.
-    
+
         :param registry: registry used for writing the data
         :type registry: ERS instance
         :param file_name: file name
@@ -18,7 +18,7 @@ def import_nt(registry, file_name, target_graph):
 
 def import_nt_rdflib(registry, file_name, target_graph):
     """ Import N-Triples file using rdflib.
-    
+
         :param registry: registry used for writing the data
         :type registry: ERS instance
         :param file_name: file name
@@ -38,7 +38,7 @@ class EntityCache(defaultdict):
 
     def add(self, s, p, o):
         """ Add <s, p, o> to cache.
-        
+
             :param s: RDF subject
             :type s: str.
             :param p: RDF property
@@ -50,7 +50,7 @@ class EntityCache(defaultdict):
 
     def parse_nt(self, **kwargs):
         """ Parse N-Triples data.
-        
+
             :returns: self
         """
         if 'filename' in kwargs:
@@ -79,7 +79,7 @@ class EntityCache(defaultdict):
 
     def parse_nt_rdflib(self, **kwargs):
         """ Parse N-Triples data using rdflib.
-        
+
             :returns: self
         """
         graph = rdflib.Graph()

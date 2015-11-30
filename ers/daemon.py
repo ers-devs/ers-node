@@ -20,8 +20,8 @@ import socket
 import sys
 import time
 import logging.handlers
-import restkit
 import zeroconf
+import uuid
 
 from store import ServiceStore
 from ConfigParser import SafeConfigParser
@@ -29,8 +29,15 @@ from defaults import ERS_AVAHI_SERVICE_TYPE, ERS_PEER_TYPE_BRIDGE, ERS_PEER_TYPE
 from defaults import set_logging
 import gobject
 from zeroconf import ERSPeerInfo
+from store import ERS_PUBLIC_DB, ERS_CACHE_DB, ERS_STATE_DB
+
+import requests
+from flask import Flask, request
+import threading
+from copy import deepcopy
 
 log = logging.getLogger('ers')
+FLASK_PORT = 5678
 
 class Configuration(object):
     """
@@ -43,9 +50,9 @@ class Configuration(object):
 
         # Get the logger
         #self._config.get('log','level')
-        
+
         self._setup_logging()
-        
+
     def _setup_logging(self):
         """
         Configure a logger for the ERS daemon
@@ -63,21 +70,21 @@ class Configuration(object):
             handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
 
         set_logging(self._config.get('log','level'), handler=handler)
-        
+
     def logger(self):
         """
         Return the logger
         """
         return self._logger
-    
+
     def tries(self):
         tries =  int(self._config.get('couchdb','tries'))
         return max(tries, 1)
-    
+
     def pidfile(self):
         pidfile = self._config.get('node','pid_file')
         return pidfile if pidfile is not None and pidfile.lower() != 'none' else None
-    
+
     def prefix(self):
         return self._config.get('couchdb','prefix')
 
@@ -86,11 +93,11 @@ class Configuration(object):
 
     def node_type(self):
         return self._config.get('node','type')
-    
+
 class ERSDaemon(object):
-    """ 
+    """
         The daemon class for the ERS daemon.
-    
+
         :param config: configuration object
         :type config: Configuration
     """
@@ -104,6 +111,10 @@ class ERSDaemon(object):
     _active = False
     _service = None
     _monitor = None
+    #this maintains some basic state.
+    #we don't want to do too many updates to the replicator database
+    #because it might stop current replications
+    _old_replication_docs = {}
 
     # List of all peers, contributor and bridges
     _peers = {
@@ -123,14 +134,22 @@ class ERSDaemon(object):
         self.tries = config.tries()
 
     def start(self):
-        """ 
+        """
         Starting up an ERS daemon.
         """
         log.info("Starting ERS daemon")
         self._check_already_running()
+
+        log.debug("Initialise CouchDB")
         self._init_db_connection()
 
-        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname(), self.prefix, self.peer_type)
+        log.debug("Publish service on ZeroConf")
+        # if the hostname is the same as another node, avahi will not pick up the service
+        # so we must add some unique identifier
+        # uuid4 guarantees unique identifiers, but we cannot fit the whole 32 characters otherwise the name becomes too long
+        # thus, we only choose the first 10 and hope there will be no collisions
+        # CAREFULL: service name has an upper bound on length.
+        service_name = 'ERS on {0} (prefix={1},type={2})'.format(socket.gethostname() + str(uuid.uuid4())[:10], self.prefix, self.peer_type)
         self._service = zeroconf.PublishedService(service_name, ERS_AVAHI_SERVICE_TYPE, self.port)
         self._service.publish()
 
@@ -145,16 +164,16 @@ class ERSDaemon(object):
         atexit.register(self.stop)
 
         log.info("ERS daemon started")
-        
+
     def _init_db_connection(self):
+        log.debug("Initialise databases")
         for i in range(self.tries):  # @UnusedVariable
             try:
                 self._store = ServiceStore()
                 return
-            except restkit.RequestError:
-                time.sleep(1)
             except Exception as e:
-                raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
+                #raise RuntimeError("Error connecting to CouchDB: {0}".format(str(e)))
+                log.info("Error connecting to Couchdb on try {0} with exception {1}".format(str(i), str(e)))
         raise RuntimeError("Error connecting to CouchDB. Please make sure CouchDB is running.")
 
     def _init_pidfile(self):
@@ -170,7 +189,7 @@ class ERSDaemon(object):
                 pass
 
     def stop(self):
-        """ 
+        """
         Stopping an ERS daemon.
         """
         if not self._active:
@@ -226,113 +245,182 @@ class ERSDaemon(object):
         log.debug("Peer left: " + str(ex_peer))
 
         del self._peers[peer_info.peer_type][peer.service_name]
-        
+
         self._update_peers_in_couchdb()
         self._update_replication_links()
 
     def _update_peers_in_couchdb(self):
-        state_doc = self._store.public.open_doc('_local/state')
+        log.debug("Update peers in CouchDB")
+        state_doc = self._store[ERS_STATE_DB]['_local/state']
+        ok = False
+        while ok == False:
+            # If there are bridges, do not record other peers in the state_doc.
+            visible_peers = None
+            if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
+                visible_peers = self._peers[ERS_PEER_TYPE_BRIDGE]
+            else:
+                visible_peers = self._peers[ERS_PEER_TYPE_CONTRIB]
+            state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
+            try:
+                self._store[ERS_STATE_DB].save(state_doc)
+                ok = True
+            except Exception as e:
+                pass
 
-        # If there are bridges, do not record other peers in the state_doc.
-        visible_peers = None
-        if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
-            visible_peers = self._peers[ERS_PEER_TYPE_BRIDGE] 
-        else:
-            visible_peers = self._peers[ERS_PEER_TYPE_CONTRIB]
-        state_doc['peers'] = [peer.to_json() for peer in visible_peers.values()]
-        self._store.public.save_doc(state_doc)
 
     def _update_replication_links(self):
         '''
         Update the links to replicate documents with other contributors and bridges
         '''
         log.debug("Update replication documents")
-        
+
         # Clear all the previous replicator documents
-        self._clear_replication_documents()
-        
+        #WHY
+        #self._clear_replication_documents()
+        # TODO
+        # we should probably add a little caching. it makes no sense to build this list
+        # of replication documents if peers and cache haven't changed
+
         # List of replication rules
         docs = {}
-        
+
+        cache_contents = self._store.cache_contents()
         # If there is at least one bridge in the neighbourhood focus on it
         # otherwise establish rules with all the contributors
         if len(self._peers[ERS_PEER_TYPE_BRIDGE]) != 0:
             # Publish all the public documents to the cache of the bridges
             for peer in self._peers[ERS_PEER_TYPE_BRIDGE].values():
-                doc_id = 'ers-auto-local-to-{0}:{1}'.format(peer.ip, peer.port)
+                doc_id = 'ers-{2}-auto-local-to-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
+                #docs[doc_id] = {
+                #    '_id': doc_id,
+                #    'source': 'ers-public',
+                #    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                #    'continuous': True
+                #    # TODO add the option to not do it too often
+                #}
+                # ALSO cache
+                doc_id = 'ers-{2}-pull-from-bridge-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
                 docs[doc_id] = {
                     '_id': doc_id,
-                    'source': 'ers-public',
-                    'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
-                    'continuous': True
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                    'target':self._store[ERS_CACHE_DB].name,
+                    'continuous': True,
+                    #'doc_ids': cache_contents,
                     # TODO add the option to not do it too often
                 }
-                
+
+
             # Synchronise local cache and bridge cache
             # TODO
         else:
-            cache_contents = self._store.cache_contents()
-            if cache_contents:
-                # Synchronise all the cached documents with the peers
-                for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                    doc_id = 'ers-auto-cache-to-{0}:{1}'.format(peer.ip, peer.port)
-                    docs[doc_id] = {
-                        '_id': doc_id,
-                        'source': self._store.cache.dbname,
-                        'target': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
-                        'continuous': True,
-                        'doc_ids' : cache_contents
-                    }
-                    
-                # Get update from their public documents we have cached
-                for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
-                    doc_id = 'ers-auto-cache-to-{0}:{1}'.format(peer.ip, peer.port)
-                    docs[doc_id] = {
-                        '_id': doc_id,
-                        'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
-                        'target': self._store.cache.dbname,
-                        'continuous': True,
-                        'doc_ids' : cache_contents
-                    }
-            
-            
-        log.debug(docs)
-        
+            #if cache_contents:
+            # Synchronise all the cached documents with the peers
+            for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+                doc_id = 'ers-{2}-pull-from-cache-of-{0}:{1}'.format(peer.ip, peer.port,socket.gethostname())
+                docs[doc_id] = {
+                    '_id': doc_id,
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-cache'),
+                    'target':self._store[ERS_CACHE_DB].name,
+                    'continuous': True,
+                    #'doc_ids' : cache_contents
+                }
+                #if a regular peer, only sync cached documents.
+                #as a bridge, we pull evertyhing
+                #if self.peer_type == ERS_PEER_TYPE_CONTRIB:
+                #    docs[doc_id]['doc_ids'] = cache_contents
+
+            # Get update from their public documents we have cached
+            for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+                doc_id = 'ers-{2}-auto-pull-from-public-of-{0}:{1}'.format(peer.ip, peer.port, socket.gethostname())
+                docs[doc_id] = {
+                    '_id': doc_id,
+                    'source': r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, 'ers-public'),
+                    'target': self._store[ERS_CACHE_DB].name,
+                    'continuous': True,
+                    #'doc_ids' : cache_contents
+                }
+                #if a regular peer, only sync cached documents.
+                #as a bridge, we pull evertyhing
+                #if self.peer_type == ERS_PEER_TYPE_CONTRIB:
+                #    docs[doc_id]['doc_ids'] = cache_contents
+
+
+
         # If this node is a bridge configured to push data to an aggregator
         # add one more rule to do that
-        
+
         # Apply sync rules
-        self._set_replication_documents(docs)
+
+        if self._old_replication_docs != docs:
+            log.debug(docs)
+            self._set_replication_documents(docs)
+            self._old_replication_docs = deepcopy(docs)
 
     def _clear_replication_documents(self):
         self._set_replication_documents({})
 
     def _set_replication_documents(self, documents):
         self._store.update_replicator_docs(documents)
-        
+
     def _update_cache(self):
-        cache_contents = self._store.cache_contents()
-        if not cache_contents:
-            return
-        for peer in self._peers.values():
-            for dbname in ('ers-public', 'ers-cache'):
-                source_db = r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
-                repl_doc = {
-                    'target': self._store.cache.dbname,
-                    'source': source_db,
-                    'continuous': False,
-                    'doc_ids' : cache_contents                
-                }
-                self._store.replicator.save_doc(repl_doc)
+        return True
+        #disable
+
+        #cache_contents = self._store.cache_contents()
+        #if not cache_contents:
+        #    return
+        #for peer in self._peers[ERS_PEER_TYPE_CONTRIB].values():
+        #    for dbname in ('ers-public', 'ers-cache'):
+        #        source_db = r'http://{0}:{1}/{2}'.format(peer.ip, peer.port, dbname)
+        #        repl_doc = {
+        #            'target': self._store[ERS_CACHE_DB].name,
+        #            'source': source_db,
+        #            'continuous': False,
+        #            'doc_ids' : cache_contents
+        #        }
+        #        self._store.replicator.save(repl_doc)
 
     def _check_already_running(self):
+        log.debug("Check if already running")
         if self.pidfile is not None and os.path.exists(self.pidfile):
             raise RuntimeError("The ERS daemon seems to be already running. If this is not the case, " +
                                "delete " + self.pidfile + " and try again.")
 
+daemon = None
+
+app = Flask(__name__)
+
+@app.route('/ReplicationLinksUpdate')
+def update_replication_links_api():
+    global daemon
+    daemon._update_replication_links()
+
+    return 'Replication links updated'
+
+@app.route('/PeerType')
+def get_peer_type():
+    global daemon
+    return str(daemon.peer_type)
+
+
+def shutdown_server():
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Not running with the Werkzeug Server')
+    func()
+
+@app.route('/Stop')
+def stop_server():
+    shutdown_server()
+    return 'Server shutting down'
+
+def run_flask():
+    from werkzeug.serving import run_simple
+    #run_simple('localhost', FLASK_PORT, app)
+    app.run(port=FLASK_PORT, threaded = True)
 
 def run():
-    """ 
+    """
     Parse the given arguments for setting up the daemon and run it.
     """
     # Parse the command line
@@ -342,8 +430,8 @@ def run():
 
     # Create the configuration object
     config = Configuration(args.config)
-    
-    daemon = None
+
+    global daemon
     failed = False
     mainloop = None
     try:
@@ -352,33 +440,42 @@ def run():
 
         def sig_handler(sig, frame):
             mainloop.quit()
+        try:
+            requests.get('http://localhost:'+str(FLASK_PORT)+'/Stop')
+        except Exception as e:
+            pass
+
+
         signal.signal(signal.SIGQUIT, sig_handler)
         signal.signal(signal.SIGTERM, sig_handler)
 
-        # Initialise the web interface handler
-        #application = web.Application([
-        #    (r"/api/(.*)", WebAPIHandler),
-        #    (r"/(.*)", web.StaticFileHandler, {'path': 'www', 'default_filename' : 'index.html'}),
-        #])
-        #application.listen(8888, address="127.0.0.1")
-
         # Start the main loop
+        thread = threading.Thread(target = run_flask)
+        thread.start()
         mainloop = gobject.MainLoop()
+        gobject.threads_init()
+
         mainloop.run()
-        
+
     except (KeyboardInterrupt, SystemExit):
         if mainloop is not None:
             mainloop.quit()
+        requests.get('http://localhost:'+str(FLASK_PORT)+'/Stop')
     except RuntimeError as e:
         log.critical(str(e))
         failed = True
 
     if daemon is not None:
         daemon.stop()
+        #maybe daemon has been stopped some other way ?
+        try:
+            requests.get('http://localhost:'+str(FLASK_PORT)+'/Stop')
+        except Exception as e:
+            pass
 
     sys.exit(os.EX_SOFTWARE if failed else os.EX_OK)
 
 
 if __name__ == '__main__':
     run()
-    
+

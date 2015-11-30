@@ -1,5 +1,8 @@
 *.pyc
+erl_crash.dump
 *.class
+*.swp
+*.swo
 
 docs/_build
 build/
